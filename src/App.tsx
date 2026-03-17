@@ -21,6 +21,8 @@ const APP_VERSION = __APP_VERSION__;
 const APP_LICENSE = __APP_LICENSE__;
 const APP_REPOSITORY = __APP_REPOSITORY__;
 const LATEST_RELEASE_API = "https://api.github.com/repos/jjdeharo/puntual/releases/latest";
+const AUTO_UPDATE_CHECK_KEY = "puntual:last-update-check-at";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 type UpdateStatus =
   | { kind: "idle" }
@@ -353,6 +355,30 @@ function compareVersions(left: string, right: string) {
   return 0;
 }
 
+async function fetchLatestRelease() {
+  const response = await fetch(LATEST_RELEASE_API, {
+    headers: {
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("request-failed");
+  }
+
+  const release = (await response.json()) as { tag_name?: string; html_url?: string };
+  const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
+
+  if (!latestVersion) {
+    throw new Error("invalid-release");
+  }
+
+  return {
+    latestVersion,
+    url: String(release.html_url ?? APP_REPOSITORY),
+  };
+}
+
 function normalizeLocale(value: string | undefined | null): Exclude<AppLocale, "system"> {
   const base = String(value ?? "").toLowerCase().split("-")[0];
   return base === "ca" || base === "en" ? base : "es";
@@ -521,7 +547,7 @@ function buildRepeatInput(
 function App() {
   const [state, setState] = useState<AlarmState>(fallbackState);
   const [composer, setComposer] = useState<ComposerState>(createDefaultComposer);
-  const [scheduleMode, setScheduleMode] = useState<"absolute" | "countdown">("countdown");
+  const [scheduleMode, setScheduleMode] = useState<"absolute" | "countdown">("absolute");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
@@ -575,6 +601,29 @@ function App() {
     void audio.play().catch(() => undefined);
   }, [ringing]);
 
+  useEffect(() => {
+    const lastCheckAt = Number.parseInt(window.localStorage.getItem(AUTO_UPDATE_CHECK_KEY) ?? "0", 10);
+    if (Number.isFinite(lastCheckAt) && Date.now() - lastCheckAt < ONE_DAY_MS) {
+      return;
+    }
+
+    window.localStorage.setItem(AUTO_UPDATE_CHECK_KEY, String(Date.now()));
+    void (async () => {
+      try {
+        const { latestVersion, url } = await fetchLatestRelease();
+        if (compareVersions(latestVersion, APP_VERSION) > 0) {
+          setUpdateStatus({
+            kind: "available",
+            version: latestVersion,
+            url,
+          });
+        }
+      } catch {
+        // Silent daily background check.
+      }
+    })();
+  }, []);
+
   const scheduled = useMemo(
     () => state.alarms.filter((alarm) => alarm.status === "scheduled").sort((a, b) => a.targetAt - b.targetAt),
     [state.alarms]
@@ -611,7 +660,7 @@ function App() {
 
   function resetComposer() {
     setComposer(createDefaultComposer());
-    setScheduleMode("countdown");
+    setScheduleMode("absolute");
     setEditingId(null);
     setError("");
   }
@@ -712,42 +761,40 @@ function App() {
     await window.alarmApi.setLocale(locale);
   }
 
-  async function checkForUpdates() {
-    setUpdateStatus({ kind: "checking" });
+  async function checkForUpdates(options?: { silent?: boolean }) {
+    const silent = options?.silent === true;
+
+    if (!silent) {
+      setUpdateStatus({ kind: "checking" });
+    }
 
     try {
-      const response = await fetch(LATEST_RELEASE_API, {
-        headers: {
-          Accept: "application/vnd.github+json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(messages.checkUpdatesFailed);
-      }
-
-      const release = (await response.json()) as { tag_name?: string; html_url?: string };
-      const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
-
-      if (!latestVersion) {
-        throw new Error(messages.invalidReleaseData);
-      }
+      const { latestVersion, url } = await fetchLatestRelease();
 
       if (compareVersions(latestVersion, APP_VERSION) > 0) {
         setUpdateStatus({
           kind: "available",
           version: latestVersion,
-          url: String(release.html_url ?? APP_REPOSITORY),
+          url,
         });
         return;
       }
 
-      setUpdateStatus({ kind: "up-to-date", version: latestVersion });
+      if (!silent) {
+        setUpdateStatus({ kind: "up-to-date", version: latestVersion });
+      } else if (updateStatus.kind !== "available") {
+        setUpdateStatus({ kind: "idle" });
+      }
     } catch (caughtError) {
-      setUpdateStatus({
-        kind: "error",
-        message: caughtError instanceof Error ? caughtError.message : messages.checkUpdatesFailed,
-      });
+      if (!silent) {
+        setUpdateStatus({
+          kind: "error",
+          message:
+            caughtError instanceof Error && caughtError.message === "invalid-release"
+              ? messages.invalidReleaseData
+              : messages.checkUpdatesFailed,
+        });
+      }
     }
   }
 
@@ -803,6 +850,13 @@ function App() {
           <div className="mode-row">
             <button
               type="button"
+              className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
+              onClick={() => setScheduleMode("absolute")}
+            >
+              {messages.dateTime}
+            </button>
+            <button
+              type="button"
               className={scheduleMode === "countdown" ? "toggle-button active" : "toggle-button"}
               onClick={() => {
                 setScheduleMode("countdown");
@@ -816,13 +870,6 @@ function App() {
               }}
             >
               {messages.countdown}
-            </button>
-            <button
-              type="button"
-              className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
-              onClick={() => setScheduleMode("absolute")}
-            >
-              {messages.dateTime}
             </button>
           </div>
 
@@ -904,7 +951,6 @@ function App() {
                 >
                   <option value="none">{messages.noRepeat}</option>
                   <option value="daily">{messages.repeatDaily}</option>
-                  <option value="workdays">{messages.repeatWorkdays}</option>
                   <option value="weekly">{messages.repeatWeekly}</option>
                   <option value="monthly">{messages.repeatMonthly}</option>
                   <option value="yearly">{messages.repeatYearly}</option>
@@ -1194,7 +1240,7 @@ function App() {
                 <ExternalLink size={13} />
                 {messages.downloads}
               </button>
-              <button type="button" className="secondary-button" onClick={checkForUpdates}>
+              <button type="button" className="secondary-button" onClick={() => void checkForUpdates()}>
                 <RefreshCw size={13} className={updateStatus.kind === "checking" ? "spin" : ""} />
                 {messages.checkUpdates}
               </button>
