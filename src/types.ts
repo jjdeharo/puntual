@@ -1,4 +1,5 @@
 export type AlarmStatus = "scheduled" | "ringing" | "dismissed";
+export type AppLocale = "system" | "es" | "ca" | "en";
 
 export type Alarm = {
   id: string;
@@ -15,6 +16,7 @@ export type Alarm = {
 export type AlarmSettings = {
   launchAtLogin: boolean;
   silenceWhileWindowOpen: boolean;
+  locale: AppLocale;
 };
 
 export type AlarmState = {
@@ -42,6 +44,7 @@ declare global {
       dismissAlarm: (id: string) => Promise<AlarmState>;
       deleteAlarm: (id: string) => Promise<AlarmState>;
       setLaunchAtLogin: (enabled: boolean) => Promise<AlarmState>;
+      setLocale: (locale: AppLocale) => Promise<AlarmState>;
       showWindow: () => Promise<void>;
       openExternal: (url: string) => Promise<void>;
       onState: (listener: (state: AlarmState) => void) => () => void;

@@ -6,6 +6,7 @@ const DEFAULT_STATE = {
   settings: {
     launchAtLogin: true,
     silenceWhileWindowOpen: false,
+    locale: "system",
   },
 };
 
@@ -70,6 +71,8 @@ function normalizeState(value) {
     ...(value?.settings && typeof value.settings === "object" ? value.settings : {}),
   };
 
+  settings.locale = normalizeLocale(settings.locale);
+
   return { alarms, settings };
 }
 
@@ -103,4 +106,8 @@ function normalizeAlarm(value) {
 
 function normalizeStatus(value) {
   return value === "ringing" || value === "dismissed" ? value : "scheduled";
+}
+
+function normalizeLocale(value) {
+  return value === "es" || value === "ca" || value === "en" || value === "system" ? value : "system";
 }

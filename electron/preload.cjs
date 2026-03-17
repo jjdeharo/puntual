@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("alarmApi", {
   dismissAlarm: (id) => ipcRenderer.invoke("alarm:dismiss", id),
   deleteAlarm: (id) => ipcRenderer.invoke("alarm:delete", id),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke("settings:set-launch-at-login", enabled),
+  setLocale: (locale) => ipcRenderer.invoke("settings:set-locale", locale),
   showWindow: () => ipcRenderer.invoke("app:show-window"),
   openExternal: (url) => ipcRenderer.invoke("app:open-external", url),
   onState: (listener) => {

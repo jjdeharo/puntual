@@ -1,7 +1,42 @@
-import { Notification } from "electron";
+import { Notification, app } from "electron";
 
-function ringMessage(alarm) {
-  return alarm.title?.trim() ? alarm.title.trim() : "Alarma sin título";
+function normalizeLocale(value) {
+  const base = String(value ?? "").toLowerCase().split("-")[0];
+  return base === "ca" || base === "en" ? base : "es";
+}
+
+function getLocale(state) {
+  return state?.settings?.locale === "system" ? normalizeLocale(app.getLocale()) : normalizeLocale(state?.settings?.locale);
+}
+
+function t(state, key) {
+  const locale = getLocale(state);
+  const dictionaries = {
+    es: {
+      untitled: "Alarma sin título",
+      pending: "Alarma pendiente al volver a iniciar",
+      active: "Alarma activada",
+      click_to_stop: "Haz clic para detener.",
+    },
+    ca: {
+      untitled: "Alarma sense títol",
+      pending: "Alarma pendent en tornar a iniciar",
+      active: "Alarma activada",
+      click_to_stop: "Fes clic per aturar-la.",
+    },
+    en: {
+      untitled: "Untitled alarm",
+      pending: "Pending alarm after reopening",
+      active: "Alarm triggered",
+      click_to_stop: "Click to stop it.",
+    },
+  };
+
+  return dictionaries[locale][key] ?? dictionaries.es[key];
+}
+
+function ringMessage(alarm, state) {
+  return alarm.title?.trim() ? alarm.title.trim() : t(state, "untitled");
 }
 
 export function createAlarmScheduler({ store, onStateChange, onRingStateChange }) {
@@ -58,7 +93,7 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
 
     if (triggeredNow.length > 0) {
       for (const alarm of triggeredNow) {
-        showNotification(alarm, notifyRecovered);
+        showNotification(alarm, nextState, notifyRecovered);
       }
     }
   }
@@ -100,10 +135,10 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
     }
   }
 
-  function showNotification(alarm, recovered) {
+  function showNotification(alarm, state, recovered) {
     const notification = new Notification({
-      title: recovered ? "Alarma pendiente al volver a iniciar" : "Alarma activada",
-      body: `${ringMessage(alarm)}. Haz clic para detener.`,
+      title: recovered ? t(state, "pending") : t(state, "active"),
+      body: `${ringMessage(alarm, state)}. ${t(state, "click_to_stop")}`,
       urgency: "critical",
       // The renderer is responsible for alarm audio so the system notification stays silent.
       silent: true,

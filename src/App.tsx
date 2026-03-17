@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
-import { es } from "date-fns/locale";
-import { Bell, BellOff, Clock3, ExternalLink, Info, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ca, enUS, es } from "date-fns/locale";
+import { Bell, BellOff, Clock3, ExternalLink, Info, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
 import "./App.css";
-import type { Alarm, AlarmState } from "./types";
+import type { Alarm, AlarmState, AppLocale } from "./types";
 
 const ALARM_SOUND_PATH =
   "file:///home/jjdeharo/Documentos/github/escritorio-digital.github.io/dist/sounds/alarm-clock-elapsed.oga";
@@ -13,6 +13,7 @@ const fallbackState: AlarmState = {
   settings: {
     launchAtLogin: true,
     silenceWhileWindowOpen: false,
+    locale: "system",
   },
 };
 
@@ -28,6 +29,192 @@ type UpdateStatus =
   | { kind: "available"; version: string; url: string }
   | { kind: "error"; message: string };
 
+const DATE_FNS_LOCALES = {
+  es,
+  ca,
+  en: enUS,
+} as const;
+
+const LOCALE_LABELS: Record<AppLocale, { es: string; ca: string; en: string }> = {
+  system: { es: "Automático", ca: "Automàtic", en: "Automatic" },
+  es: { es: "Español", ca: "Espanyol", en: "Spanish" },
+  ca: { es: "Catalán", ca: "Català", en: "Catalan" },
+  en: { es: "Inglés", ca: "Anglès", en: "English" },
+};
+
+const MESSAGES = {
+  es: {
+    now: "Ahora",
+    today: "Hoy",
+    tomorrow: "Mañana",
+    preview: "Vista previa: {value}",
+    noNextAlarm: "Sin próxima alarma",
+    ringing: "Sonando",
+    waiting: "En espera",
+    noAlarms: "Sin alarmas",
+    editAlarm: "Editar alarma",
+    newAlarm: "Nueva alarma",
+    title: "Título",
+    countdown: "Cuenta atrás",
+    dateTime: "Fecha y hora",
+    minutesShort: "Min",
+    secondsShort: "Seg",
+    sound: "Sonido",
+    silent: "Silencio",
+    notes: "Notas",
+    cancel: "Cancelar",
+    save: "Guardar",
+    add: "Añadir",
+    activeAlarms: "Alarmas activas",
+    noActiveAlarms: "Sin alarmas activas.",
+    untitled: "Sin título",
+    muted: "Muda",
+    edit: "Editar",
+    ringingSection: "Sonando",
+    nothingActive: "Nada activo.",
+    dismiss: "Descartar",
+    about: "Acerca de",
+    settings: "Configuración",
+    close: "Cerrar",
+    aboutTitle: "Acerca de Puntual",
+    aboutText: "Alarma de escritorio con bandeja, persistencia real y cuenta atrás que sobrevive a cierres y reinicios.",
+    version: "Versión",
+    license: "Licencia",
+    repository: "Repositorio",
+    openRepo: "Abrir repo",
+    downloads: "Descargas",
+    checkUpdates: "Buscar actualizaciones",
+    checkingUpdates: "Consultando la última release publicada...",
+    checkUpdatesFailed: "No se pudo comprobar si hay actualizaciones.",
+    invalidReleaseData: "GitHub no devolvió una versión válida.",
+    upToDate: "Estás al día. Última versión publicada: {version}.",
+    updateAvailable: "Hay una versión más reciente: {version}.",
+    openRelease: "Abrir release",
+    settingsTitle: "Configuración",
+    appLanguage: "Idioma de la app",
+    systemLanguage: "Idioma detectado del sistema: {language}.",
+    launchAtLogin: "Iniciar Puntual con el sistema",
+    launchAtLoginHelp: "Abre la aplicación al iniciar sesión y la deja minimizada en la bandeja.",
+    invalidCountdown: "Cuenta atrás inválida.",
+    invalidDate: "Fecha inválida.",
+    saveFailed: "No se pudo guardar.",
+  },
+  ca: {
+    now: "Ara",
+    today: "Avui",
+    tomorrow: "Demà",
+    preview: "Vista prèvia: {value}",
+    noNextAlarm: "Sense pròxima alarma",
+    ringing: "Sonant",
+    waiting: "En espera",
+    noAlarms: "Sense alarmes",
+    editAlarm: "Edita alarma",
+    newAlarm: "Nova alarma",
+    title: "Títol",
+    countdown: "Compte enrere",
+    dateTime: "Data i hora",
+    minutesShort: "Min",
+    secondsShort: "Seg",
+    sound: "So",
+    silent: "Silenci",
+    notes: "Notes",
+    cancel: "Cancel·la",
+    save: "Desa",
+    add: "Afegeix",
+    activeAlarms: "Alarmes actives",
+    noActiveAlarms: "No hi ha alarmes actives.",
+    untitled: "Sense títol",
+    muted: "Muda",
+    edit: "Edita",
+    ringingSection: "Sonant",
+    nothingActive: "No hi ha res actiu.",
+    dismiss: "Descarta",
+    about: "Quant a",
+    settings: "Configuració",
+    close: "Tanca",
+    aboutTitle: "Quant a Puntual",
+    aboutText: "Alarma d'escriptori amb safata, persistència real i compte enrere que sobreviu a tancaments i reinicis.",
+    version: "Versió",
+    license: "Llicència",
+    repository: "Repositori",
+    openRepo: "Obre el repo",
+    downloads: "Descàrregues",
+    checkUpdates: "Comprova actualitzacions",
+    checkingUpdates: "Consultant l'última release publicada...",
+    checkUpdatesFailed: "No s'ha pogut comprovar si hi ha actualitzacions.",
+    invalidReleaseData: "GitHub no ha retornat una versió vàlida.",
+    upToDate: "Ja està al dia. Última versió publicada: {version}.",
+    updateAvailable: "Hi ha una versió més recent: {version}.",
+    openRelease: "Obre la release",
+    settingsTitle: "Configuració",
+    appLanguage: "Idioma de l'app",
+    systemLanguage: "Idioma detectat del sistema: {language}.",
+    launchAtLogin: "Inicia Puntual amb el sistema",
+    launchAtLoginHelp: "Obre l'aplicació en iniciar sessió i la deixa minimitzada a la safata.",
+    invalidCountdown: "Compte enrere invàlid.",
+    invalidDate: "Data invàlida.",
+    saveFailed: "No s'ha pogut desar.",
+  },
+  en: {
+    now: "Now",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    preview: "Preview: {value}",
+    noNextAlarm: "No upcoming alarm",
+    ringing: "Ringing",
+    waiting: "Waiting",
+    noAlarms: "No alarms",
+    editAlarm: "Edit alarm",
+    newAlarm: "New alarm",
+    title: "Title",
+    countdown: "Countdown",
+    dateTime: "Date and time",
+    minutesShort: "Min",
+    secondsShort: "Sec",
+    sound: "Sound",
+    silent: "Silent",
+    notes: "Notes",
+    cancel: "Cancel",
+    save: "Save",
+    add: "Add",
+    activeAlarms: "Active alarms",
+    noActiveAlarms: "No active alarms.",
+    untitled: "Untitled",
+    muted: "Muted",
+    edit: "Edit",
+    ringingSection: "Ringing",
+    nothingActive: "Nothing active.",
+    dismiss: "Dismiss",
+    about: "About",
+    settings: "Settings",
+    close: "Close",
+    aboutTitle: "About Puntual",
+    aboutText: "Desktop alarm app with tray integration, real persistence and a countdown that survives closes and restarts.",
+    version: "Version",
+    license: "License",
+    repository: "Repository",
+    openRepo: "Open repo",
+    downloads: "Downloads",
+    checkUpdates: "Check for updates",
+    checkingUpdates: "Checking the latest published release...",
+    checkUpdatesFailed: "Could not check for updates.",
+    invalidReleaseData: "GitHub did not return a valid version.",
+    upToDate: "You're up to date. Latest published version: {version}.",
+    updateAvailable: "A newer version is available: {version}.",
+    openRelease: "Open release",
+    settingsTitle: "Settings",
+    appLanguage: "App language",
+    systemLanguage: "Detected system language: {language}.",
+    launchAtLogin: "Start Puntual with the system",
+    launchAtLoginHelp: "Open the app when the session starts and keep it minimized to the tray.",
+    invalidCountdown: "Invalid countdown.",
+    invalidDate: "Invalid date.",
+    saveFailed: "Could not save.",
+  },
+} as const;
+
+type MessageCatalog = (typeof MESSAGES)[keyof typeof MESSAGES];
+
 function toInputDateTime(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
@@ -42,33 +229,6 @@ function createDefaultComposer() {
     countdownSeconds: "0",
     soundEnabled: true,
   };
-}
-
-function formatTargetDate(timestamp: number) {
-  const date = new Date(timestamp);
-
-  if (isToday(date)) {
-    return `Hoy ${format(date, "HH:mm", { locale: es })}`;
-  }
-
-  if (isTomorrow(date)) {
-    return `Mañana ${format(date, "HH:mm", { locale: es })}`;
-  }
-
-  return format(date, "d MMM, HH:mm", { locale: es });
-}
-
-function formatRemaining(timestamp: number, referenceNow: number) {
-  const diff = timestamp - referenceNow;
-
-  if (diff <= 0) {
-    return "Ahora";
-  }
-
-  return formatDistanceStrict(timestamp, referenceNow, {
-    locale: es,
-    addSuffix: true,
-  });
 }
 
 function compareVersions(left: string, right: string) {
@@ -91,6 +251,53 @@ function compareVersions(left: string, right: string) {
   return 0;
 }
 
+function normalizeLocale(value: string | undefined | null): Exclude<AppLocale, "system"> {
+  const base = String(value ?? "").toLowerCase().split("-")[0];
+  return base === "ca" || base === "en" ? base : "es";
+}
+
+function translate(locale: Exclude<AppLocale, "system">, key: keyof (typeof MESSAGES)["es"], variables: Record<string, string | number> = {}) {
+  const template = MESSAGES[locale][key] ?? MESSAGES.es[key];
+  return template.replace(/\{(\w+)\}/g, (_match, token) => String(variables[token] ?? ""));
+}
+
+function formatTargetDate(
+  timestamp: number,
+  locale: Exclude<AppLocale, "system">,
+  messages: MessageCatalog
+) {
+  const date = new Date(timestamp);
+  const dateFnsLocale = DATE_FNS_LOCALES[locale];
+
+  if (isToday(date)) {
+    return `${messages.today} ${format(date, "HH:mm", { locale: dateFnsLocale })}`;
+  }
+
+  if (isTomorrow(date)) {
+    return `${messages.tomorrow} ${format(date, "HH:mm", { locale: dateFnsLocale })}`;
+  }
+
+  return format(date, "d MMM, HH:mm", { locale: dateFnsLocale });
+}
+
+function formatRemaining(
+  timestamp: number,
+  referenceNow: number,
+  locale: Exclude<AppLocale, "system">,
+  messages: MessageCatalog
+) {
+  const diff = timestamp - referenceNow;
+
+  if (diff <= 0) {
+    return messages.now;
+  }
+
+  return formatDistanceStrict(timestamp, referenceNow, {
+    locale: DATE_FNS_LOCALES[locale],
+    addSuffix: true,
+  });
+}
+
 type ComposerState = {
   title: string;
   notes: string;
@@ -108,9 +315,14 @@ function App() {
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [ringing, setRinging] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const systemLocale = useMemo(() => normalizeLocale(typeof navigator === "undefined" ? "es" : navigator.language), []);
+  const appLocale = state.settings.locale === "system" ? systemLocale : state.settings.locale;
+  const messages = MESSAGES[appLocale];
+  const languageName = LOCALE_LABELS[appLocale][appLocale];
 
   useEffect(() => {
     let mounted = true;
@@ -181,10 +393,10 @@ function App() {
   }, [composer.targetAt, countdownDurationMs, now, scheduleMode]);
   const headerTargetAt = nextAlarm?.targetAt ?? previewTargetAt;
   const headerTargetLabel = nextAlarm
-    ? formatTargetDate(nextAlarm.targetAt)
+    ? formatTargetDate(nextAlarm.targetAt, appLocale, messages)
     : previewTargetAt
-      ? `Vista previa: ${formatTargetDate(previewTargetAt)}`
-      : "Sin próxima alarma";
+      ? translate(appLocale, "preview", { value: formatTargetDate(previewTargetAt, appLocale, messages) })
+      : messages.noNextAlarm;
 
   function resetComposer() {
     setComposer(createDefaultComposer());
@@ -216,7 +428,7 @@ function App() {
         ? Date.now() + (countdownDurationMs ?? NaN)
         : new Date(composer.targetAt).getTime();
     if (!Number.isFinite(targetAt)) {
-      setError(scheduleMode === "countdown" ? "Cuenta atrás inválida." : "Fecha inválida.");
+      setError(scheduleMode === "countdown" ? messages.invalidCountdown : messages.invalidDate);
       return;
     }
 
@@ -235,7 +447,7 @@ function App() {
       }
       resetComposer();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "No se pudo guardar.");
+      setError(caughtError instanceof Error ? caughtError.message : messages.saveFailed);
     }
   }
 
@@ -254,6 +466,10 @@ function App() {
     await window.alarmApi.openExternal(url);
   }
 
+  async function setLocale(locale: AppLocale) {
+    await window.alarmApi.setLocale(locale);
+  }
+
   async function checkForUpdates() {
     setUpdateStatus({ kind: "checking" });
 
@@ -265,14 +481,14 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo consultar GitHub.");
+        throw new Error(messages.checkUpdatesFailed);
       }
 
       const release = (await response.json()) as { tag_name?: string; html_url?: string };
       const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
 
       if (!latestVersion) {
-        throw new Error("GitHub no devolvió una versión válida.");
+        throw new Error(messages.invalidReleaseData);
       }
 
       if (compareVersions(latestVersion, APP_VERSION) > 0) {
@@ -288,7 +504,7 @@ function App() {
     } catch (caughtError) {
       setUpdateStatus({
         kind: "error",
-        message: caughtError instanceof Error ? caughtError.message : "No se pudo comprobar.",
+        message: caughtError instanceof Error ? caughtError.message : messages.checkUpdatesFailed,
       });
     }
   }
@@ -302,43 +518,44 @@ function App() {
           </div>
           <div className="brand-copy">
             <strong>Puntual</strong>
-            <span>{now ? format(new Date(now), "EEEE d MMMM, HH:mm", { locale: es }) : ""}</span>
+            <span>{now ? format(new Date(now), "EEEE d MMMM, HH:mm", { locale: DATE_FNS_LOCALES[appLocale] }) : ""}</span>
           </div>
         </div>
 
         <div className="topbar-center">
           <div className="status-line">
-            <span className={`state-chip ${ringing ? "alert" : ""}`}>{ringing ? "Sonando" : "En espera"}</span>
-            <strong>{headerTargetAt ? formatRemaining(headerTargetAt, now) : "Sin alarmas"}</strong>
+            <span className={`state-chip ${ringing ? "alert" : ""}`}>{ringing ? messages.ringing : messages.waiting}</span>
+            <strong>{headerTargetAt ? formatRemaining(headerTargetAt, now, appLocale, messages) : messages.noAlarms}</strong>
           </div>
           <span className="next-line">{headerTargetLabel}</span>
         </div>
 
-        <label className="checkbox-inline prominent topbar-checkbox">
-          <input
-            type="checkbox"
-            checked={state.settings.launchAtLogin}
-            onChange={(event) => window.alarmApi.setLaunchAtLogin(event.target.checked)}
-          />
-          <span>Iniciar Puntual con el sistema</span>
-        </label>
+        <button
+          type="button"
+          className="icon-button topbar-action"
+          onClick={() => setSettingsOpen(true)}
+          aria-label={messages.settings}
+          title={messages.settings}
+        >
+          <Settings size={13} />
+        </button>
 
         <button type="button" className="secondary-button topbar-action" onClick={() => setAboutOpen(true)}>
           <Info size={13} />
-          Acerca de
+          {messages.about}
         </button>
       </header>
 
       <section className="main-grid">
         <form className="composer" onSubmit={submitAlarm}>
           <div className="section-head">
-            <h1>{editingId ? "Editar alarma" : "Nueva alarma"}</h1>
+            <h1>{editingId ? messages.editAlarm : messages.newAlarm}</h1>
           </div>
 
           <input
             value={composer.title}
             onChange={(event) => setComposer((current) => ({ ...current, title: event.target.value }))}
-            placeholder="Título"
+            placeholder={messages.title}
           />
 
           <div className="mode-row">
@@ -347,14 +564,14 @@ function App() {
               className={scheduleMode === "countdown" ? "toggle-button active" : "toggle-button"}
               onClick={() => setScheduleMode("countdown")}
             >
-              Cuenta atrás
+              {messages.countdown}
             </button>
             <button
               type="button"
               className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
               onClick={() => setScheduleMode("absolute")}
             >
-              Fecha y hora
+              {messages.dateTime}
             </button>
           </div>
 
@@ -367,7 +584,7 @@ function App() {
                 onChange={(event) =>
                   setComposer((current) => ({ ...current, countdownMinutes: event.target.value }))
                 }
-                placeholder="Min"
+                placeholder={messages.minutesShort}
               />
               <input
                 type="number"
@@ -377,7 +594,7 @@ function App() {
                 onChange={(event) =>
                   setComposer((current) => ({ ...current, countdownSeconds: event.target.value }))
                 }
-                placeholder="Seg"
+                placeholder={messages.secondsShort}
               />
             </div>
           ) : (
@@ -395,14 +612,14 @@ function App() {
               onClick={() => setComposer((current) => ({ ...current, soundEnabled: !current.soundEnabled }))}
             >
               {composer.soundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
-              {composer.soundEnabled ? "Sonido" : "Silencio"}
+              {composer.soundEnabled ? messages.sound : messages.silent}
             </button>
           </div>
 
           <textarea
             value={composer.notes}
             onChange={(event) => setComposer((current) => ({ ...current, notes: event.target.value }))}
-            placeholder="Notas"
+            placeholder={messages.notes}
             rows={2}
           />
 
@@ -410,41 +627,41 @@ function App() {
 
           {editingId ? (
             <button type="button" className="secondary-button full-width" onClick={resetComposer}>
-              Cancelar
+              {messages.cancel}
             </button>
           ) : null}
 
           <button type="submit" className="primary-button primary-submit">
             <Plus size={13} />
-            {editingId ? "Guardar" : "Añadir"}
+            {editingId ? messages.save : messages.add}
           </button>
         </form>
 
         <section className="lists">
           <div className="list-block">
             <div className="list-head">
-              <h2>Alarmas activas</h2>
+              <h2>{messages.activeAlarms}</h2>
               <span>{scheduled.length}</span>
             </div>
 
             <div className="list-body">
               {scheduled.length === 0 ? (
-                <div className="empty-state">Sin alarmas activas.</div>
+                <div className="empty-state">{messages.noActiveAlarms}</div>
               ) : (
                 scheduled.map((alarm) => (
                   <article className="alarm-row" key={alarm.id}>
                     <div className="alarm-copy">
-                      <strong title={alarm.notes || undefined}>{alarm.title || "Sin título"}</strong>
-                      <span>{formatTargetDate(alarm.targetAt)}</span>
-                      <small>{now ? formatRemaining(alarm.targetAt, now) : ""}</small>
+                      <strong title={alarm.notes || undefined}>{alarm.title || messages.untitled}</strong>
+                      <span>{formatTargetDate(alarm.targetAt, appLocale, messages)}</span>
+                      <small>{now ? formatRemaining(alarm.targetAt, now, appLocale, messages) : ""}</small>
                     </div>
 
                     <div className="alarm-actions">
                       <span className={alarm.soundEnabled ? "sound-pill active" : "sound-pill"}>
-                        {alarm.soundEnabled ? "Sonido" : "Muda"}
+                        {alarm.soundEnabled ? messages.sound : messages.muted}
                       </span>
                       <button type="button" className="secondary-button" onClick={() => startEditing(alarm)}>
-                        Editar
+                        {messages.edit}
                       </button>
                       <button type="button" className="icon-button" onClick={() => deleteAlarm(alarm.id)}>
                         <Trash2 size={13} />
@@ -458,23 +675,23 @@ function App() {
 
           <div className="list-block">
             <div className="list-head">
-              <h2>Sonando</h2>
+              <h2>{messages.ringingSection}</h2>
               <span>{ringingAlarms.length}</span>
             </div>
 
             <div className="list-body small">
               {ringingAlarms.length === 0 ? (
-                <div className="empty-state">Nada activo.</div>
+                <div className="empty-state">{messages.nothingActive}</div>
               ) : (
                 ringingAlarms.map((alarm) => (
                   <article className="alarm-row alert" key={alarm.id}>
                     <div className="alarm-copy">
-                      <strong>{alarm.title || "Sin título"}</strong>
-                      <span>{formatTargetDate(alarm.targetAt)}</span>
+                      <strong>{alarm.title || messages.untitled}</strong>
+                      <span>{formatTargetDate(alarm.targetAt, appLocale, messages)}</span>
                     </div>
 
                     <button type="button" className="primary-button" onClick={() => dismissAlarm(alarm.id)}>
-                      Descartar
+                      {messages.dismiss}
                     </button>
                   </article>
                 ))
@@ -483,6 +700,56 @@ function App() {
           </div>
         </section>
       </section>
+
+      {settingsOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+          <section
+            className="about-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="section-head">
+              <h2 id="settings-title">{messages.settingsTitle}</h2>
+              <button type="button" className="icon-button" onClick={() => setSettingsOpen(false)} aria-label={messages.close}>
+                ×
+              </button>
+            </div>
+
+            <div className="settings-block">
+              <label className="settings-label" htmlFor="app-locale">
+                {messages.appLanguage}
+              </label>
+              <select
+                id="app-locale"
+                className="settings-select"
+                value={state.settings.locale}
+                onChange={(event) => setLocale(event.target.value as AppLocale)}
+              >
+                {(["system", "es", "ca", "en"] as AppLocale[]).map((locale) => (
+                  <option key={locale} value={locale}>
+                    {LOCALE_LABELS[locale][appLocale]}
+                  </option>
+                ))}
+              </select>
+              <span className="settings-help">{translate(appLocale, "systemLanguage", { language: languageName })}</span>
+            </div>
+
+            <div className="settings-block">
+              <label className="checkbox-inline prominent">
+                <input
+                  type="checkbox"
+                  checked={state.settings.launchAtLogin}
+                  onChange={(event) => window.alarmApi.setLaunchAtLogin(event.target.checked)}
+                />
+                <span>{messages.launchAtLogin}</span>
+              </label>
+              <span className="settings-help">{messages.launchAtLoginHelp}</span>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {aboutOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setAboutOpen(false)}>
@@ -494,27 +761,25 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="section-head">
-              <h2 id="about-title">Acerca de Puntual</h2>
-              <button type="button" className="icon-button" onClick={() => setAboutOpen(false)} aria-label="Cerrar">
+              <h2 id="about-title">{messages.aboutTitle}</h2>
+              <button type="button" className="icon-button" onClick={() => setAboutOpen(false)} aria-label={messages.close}>
                 ×
               </button>
             </div>
 
-            <p className="about-copy">
-              Alarma de escritorio con bandeja, persistencia real y cuenta atrás que sobrevive a cierres y reinicios.
-            </p>
+            <p className="about-copy">{messages.aboutText}</p>
 
             <dl className="about-meta">
               <div>
-                <dt>Versión</dt>
+                <dt>{messages.version}</dt>
                 <dd>{APP_VERSION}</dd>
               </div>
               <div>
-                <dt>Licencia</dt>
+                <dt>{messages.license}</dt>
                 <dd>{APP_LICENSE}</dd>
               </div>
               <div>
-                <dt>Repositorio</dt>
+                <dt>{messages.repository}</dt>
                 <dd>{APP_REPOSITORY.replace(/^https?:\/\//, "")}</dd>
               </div>
             </dl>
@@ -522,26 +787,28 @@ function App() {
             <div className="about-actions">
               <button type="button" className="secondary-button" onClick={() => openExternal(APP_REPOSITORY)}>
                 <ExternalLink size={13} />
-                Abrir repo
+                {messages.openRepo}
               </button>
               <button type="button" className="secondary-button" onClick={() => openExternal(`${APP_REPOSITORY}/releases/latest`)}>
                 <ExternalLink size={13} />
-                Descargas
+                {messages.downloads}
               </button>
               <button type="button" className="secondary-button" onClick={checkForUpdates}>
                 <RefreshCw size={13} className={updateStatus.kind === "checking" ? "spin" : ""} />
-                Buscar actualizaciones
+                {messages.checkUpdates}
               </button>
             </div>
 
             <div className="update-status" aria-live="polite">
-              {updateStatus.kind === "checking" ? <span>Consultando la última release publicada...</span> : null}
-              {updateStatus.kind === "up-to-date" ? <span>Estás al día. Última versión publicada: {updateStatus.version}.</span> : null}
+              {updateStatus.kind === "checking" ? <span>{messages.checkingUpdates}</span> : null}
+              {updateStatus.kind === "up-to-date" ? (
+                <span>{translate(appLocale, "upToDate", { version: updateStatus.version })}</span>
+              ) : null}
               {updateStatus.kind === "available" ? (
                 <span>
-                  Hay una versión más reciente: {updateStatus.version}.{" "}
+                  {translate(appLocale, "updateAvailable", { version: updateStatus.version })}{" "}
                   <button type="button" className="inline-link" onClick={() => openExternal(updateStatus.url)}>
-                    Abrir release
+                    {messages.openRelease}
                   </button>
                 </span>
               ) : null}

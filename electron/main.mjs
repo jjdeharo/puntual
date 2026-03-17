@@ -125,6 +125,57 @@ function sendState(state = store.getState()) {
   refreshTrayMenu(state);
 }
 
+function normalizeLocale(value) {
+  const base = String(value ?? "").toLowerCase().split("-")[0];
+  return base === "ca" || base === "en" ? base : "es";
+}
+
+function getResolvedLocale(setting = store.getState().settings.locale) {
+  return setting === "system" ? normalizeLocale(app.getLocale()) : normalizeLocale(setting);
+}
+
+function t(state, key, variables = {}) {
+  const locale = getResolvedLocale(state?.settings?.locale);
+  const dictionaries = {
+    es: {
+      tray_idle: "Puntual",
+      tray_ringing: "{count} sonando",
+      tray_next: "Próxima alarma a las {time}",
+      tray_open: "Abrir Puntual",
+      tray_silence: "Silenciar {count} alarma{suffix}",
+      tray_none_ringing: "No hay alarmas sonando",
+      tray_next_item: "Siguiente: {value}",
+      tray_none_scheduled: "Sin alarmas programadas",
+      tray_quit: "Salir",
+    },
+    ca: {
+      tray_idle: "Puntual",
+      tray_ringing: "{count} sonant",
+      tray_next: "Pròxima alarma a les {time}",
+      tray_open: "Obrir Puntual",
+      tray_silence: "Silencia {count} alarma{suffix}",
+      tray_none_ringing: "No hi ha alarmes sonant",
+      tray_next_item: "Següent: {value}",
+      tray_none_scheduled: "No hi ha alarmes programades",
+      tray_quit: "Sortir",
+    },
+    en: {
+      tray_idle: "Puntual",
+      tray_ringing: "{count} ringing",
+      tray_next: "Next alarm at {time}",
+      tray_open: "Open Puntual",
+      tray_silence: "Silence {count} alarm{suffix}",
+      tray_none_ringing: "No alarms ringing",
+      tray_next_item: "Next: {value}",
+      tray_none_scheduled: "No alarms scheduled",
+      tray_quit: "Quit",
+    },
+  };
+
+  const template = dictionaries[locale][key] ?? dictionaries.es[key] ?? key;
+  return template.replace(/\{(\w+)\}/g, (_match, token) => String(variables[token] ?? ""));
+}
+
 function refreshTrayMenu(state) {
   if (!tray) {
     return;
@@ -135,32 +186,37 @@ function refreshTrayMenu(state) {
 
   tray.setToolTip(
     ringingCount > 0
-      ? `Puntual: ${ringingCount} sonando`
+      ? `Puntual: ${t(state, "tray_ringing", { count: ringingCount })}`
       : nextAlarm
-        ? `Próxima alarma a las ${new Date(nextAlarm.targetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-        : "Puntual"
+        ? t(state, "tray_next", {
+            time: new Date(nextAlarm.targetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          })
+        : t(state, "tray_idle")
   );
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Abrir Puntual",
+      label: t(state, "tray_open"),
       click: () => showWindow(),
     },
     {
-      label: ringingCount > 0 ? `Silenciar ${ringingCount} alarma${ringingCount > 1 ? "s" : ""}` : "No hay alarmas sonando",
+      label:
+        ringingCount > 0
+          ? t(state, "tray_silence", { count: ringingCount, suffix: ringingCount > 1 ? "s" : "" })
+          : t(state, "tray_none_ringing"),
       enabled: ringingCount > 0,
       click: () => dismissAllRinging(),
     },
     { type: "separator" },
     {
       label: nextAlarm
-        ? `Siguiente: ${new Date(nextAlarm.targetAt).toLocaleString()}`
-        : "Sin alarmas programadas",
+        ? t(state, "tray_next_item", { value: new Date(nextAlarm.targetAt).toLocaleString() })
+        : t(state, "tray_none_scheduled"),
       enabled: false,
     },
     { type: "separator" },
     {
-      label: "Salir",
+      label: t(state, "tray_quit"),
       click: () => {
         isQuitting = true;
         app.quit();
@@ -323,6 +379,19 @@ app.whenReady().then(() => {
     }));
 
     app.setLoginItemSettings({ openAtLogin: launchAtLogin, args: ["--autostart"] });
+    sendState(nextState);
+    return nextState;
+  });
+
+  ipcMain.handle("settings:set-locale", (_event, locale) => {
+    const nextLocale = locale === "es" || locale === "ca" || locale === "en" || locale === "system" ? locale : "system";
+    const nextState = store.mutate((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        locale: nextLocale,
+      },
+    }));
     sendState(nextState);
     return nextState;
   });
