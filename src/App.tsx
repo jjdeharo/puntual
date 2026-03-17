@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
 import { es } from "date-fns/locale";
-import { Bell, BellOff, Clock3, Plus, Trash2 } from "lucide-react";
+import { Bell, BellOff, Clock3, ExternalLink, Info, Plus, RefreshCw, Trash2 } from "lucide-react";
 import "./App.css";
 import type { Alarm, AlarmState } from "./types";
 
@@ -15,6 +15,18 @@ const fallbackState: AlarmState = {
     silenceWhileWindowOpen: false,
   },
 };
+
+const APP_VERSION = __APP_VERSION__;
+const APP_LICENSE = __APP_LICENSE__;
+const APP_REPOSITORY = __APP_REPOSITORY__;
+const LATEST_RELEASE_API = "https://api.github.com/repos/jjdeharo/puntual/releases/latest";
+
+type UpdateStatus =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "up-to-date"; version: string }
+  | { kind: "available"; version: string; url: string }
+  | { kind: "error"; message: string };
 
 function toInputDateTime(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -59,6 +71,26 @@ function formatRemaining(timestamp: number, referenceNow: number) {
   });
 }
 
+function compareVersions(left: string, right: string) {
+  const normalize = (value: string) =>
+    value
+      .replace(/^v/i, "")
+      .split(".")
+      .map((part) => Number.parseInt(part, 10) || 0);
+  const a = normalize(left);
+  const b = normalize(right);
+  const length = Math.max(a.length, b.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const diff = (a[index] ?? 0) - (b[index] ?? 0);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+
+  return 0;
+}
+
 type ComposerState = {
   title: string;
   notes: string;
@@ -76,6 +108,8 @@ function App() {
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [ringing, setRinging] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -216,6 +250,49 @@ function App() {
     }
   }
 
+  async function openExternal(url: string) {
+    await window.alarmApi.openExternal(url);
+  }
+
+  async function checkForUpdates() {
+    setUpdateStatus({ kind: "checking" });
+
+    try {
+      const response = await fetch(LATEST_RELEASE_API, {
+        headers: {
+          Accept: "application/vnd.github+json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo consultar GitHub.");
+      }
+
+      const release = (await response.json()) as { tag_name?: string; html_url?: string };
+      const latestVersion = String(release.tag_name ?? "").replace(/^v/i, "");
+
+      if (!latestVersion) {
+        throw new Error("GitHub no devolvió una versión válida.");
+      }
+
+      if (compareVersions(latestVersion, APP_VERSION) > 0) {
+        setUpdateStatus({
+          kind: "available",
+          version: latestVersion,
+          url: String(release.html_url ?? APP_REPOSITORY),
+        });
+        return;
+      }
+
+      setUpdateStatus({ kind: "up-to-date", version: latestVersion });
+    } catch (caughtError) {
+      setUpdateStatus({
+        kind: "error",
+        message: caughtError instanceof Error ? caughtError.message : "No se pudo comprobar.",
+      });
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -245,6 +322,11 @@ function App() {
           />
           <span>Iniciar Puntual con el sistema</span>
         </label>
+
+        <button type="button" className="secondary-button topbar-action" onClick={() => setAboutOpen(true)}>
+          <Info size={13} />
+          Acerca de
+        </button>
       </header>
 
       <section className="main-grid">
@@ -401,6 +483,73 @@ function App() {
           </div>
         </section>
       </section>
+
+      {aboutOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setAboutOpen(false)}>
+          <section
+            className="about-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="about-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="section-head">
+              <h2 id="about-title">Acerca de Puntual</h2>
+              <button type="button" className="icon-button" onClick={() => setAboutOpen(false)} aria-label="Cerrar">
+                ×
+              </button>
+            </div>
+
+            <p className="about-copy">
+              Alarma de escritorio con bandeja, persistencia real y cuenta atrás que sobrevive a cierres y reinicios.
+            </p>
+
+            <dl className="about-meta">
+              <div>
+                <dt>Versión</dt>
+                <dd>{APP_VERSION}</dd>
+              </div>
+              <div>
+                <dt>Licencia</dt>
+                <dd>{APP_LICENSE}</dd>
+              </div>
+              <div>
+                <dt>Repositorio</dt>
+                <dd>{APP_REPOSITORY.replace(/^https?:\/\//, "")}</dd>
+              </div>
+            </dl>
+
+            <div className="about-actions">
+              <button type="button" className="secondary-button" onClick={() => openExternal(APP_REPOSITORY)}>
+                <ExternalLink size={13} />
+                Abrir repo
+              </button>
+              <button type="button" className="secondary-button" onClick={() => openExternal(`${APP_REPOSITORY}/releases/latest`)}>
+                <ExternalLink size={13} />
+                Descargas
+              </button>
+              <button type="button" className="secondary-button" onClick={checkForUpdates}>
+                <RefreshCw size={13} className={updateStatus.kind === "checking" ? "spin" : ""} />
+                Buscar actualizaciones
+              </button>
+            </div>
+
+            <div className="update-status" aria-live="polite">
+              {updateStatus.kind === "checking" ? <span>Consultando la última release publicada...</span> : null}
+              {updateStatus.kind === "up-to-date" ? <span>Estás al día. Última versión publicada: {updateStatus.version}.</span> : null}
+              {updateStatus.kind === "available" ? (
+                <span>
+                  Hay una versión más reciente: {updateStatus.version}.{" "}
+                  <button type="button" className="inline-link" onClick={() => openExternal(updateStatus.url)}>
+                    Abrir release
+                  </button>
+                </span>
+              ) : null}
+              {updateStatus.kind === "error" ? <span>{updateStatus.message}</span> : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

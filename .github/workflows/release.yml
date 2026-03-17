@@ -1,0 +1,54 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_glob: "dist/*.deb\ndist/*.AppImage"
+          - os: windows-latest
+            artifact_glob: "dist/*.exe\ndist/*.zip"
+          - os: macos-latest
+            artifact_glob: "dist/*.zip"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:release
+
+      - name: Upload artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          while IFS= read -r pattern; do
+            [ -n "$pattern" ] || continue
+            for file in $pattern; do
+              [ -f "$file" ] || continue
+              gh release upload "${GITHUB_REF_NAME}" "$file" --repo "${GITHUB_REPOSITORY}" --clobber
+            done
+          done <<'EOF'
+          ${{ matrix.artifact_glob }}
+          EOF

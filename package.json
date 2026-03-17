@@ -1,9 +1,14 @@
 {
   "name": "puntual",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "license": "AGPL-3.0-or-later",
   "description": "Puntual, alarma de escritorio para Linux con bandeja del sistema y persistencia real.",
   "homepage": "https://github.com/jjdeharo/puntual",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:jjdeharo/puntual.git"
+  },
   "author": {
     "name": "Juan Jose de Haro",
     "email": "jjdeharo@gmail.com"
@@ -15,7 +20,8 @@
     "build": "tsc -b && vite build",
     "start": "electron .",
     "dist:app": "npm run build && electron-builder --linux dir",
-    "dist": "bash ./scripts/build-deb.sh",
+    "dist:release": "npm run build && electron-builder --publish never",
+    "dist": "npm run build && electron-builder --linux deb",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -49,9 +55,9 @@
   "build": {
     "appId": "io.jjdeharo.puntual",
     "productName": "Puntual",
-    "compression": "store",
+    "compression": "normal",
     "files": [
-      "dist/**/*",
+      "dist/renderer/**/*",
       "electron/**/*",
       "package.json"
     ],
@@ -60,10 +66,24 @@
     },
     "linux": {
       "target": [
-        "dir"
+        "deb",
+        "dir",
+        "AppImage"
       ],
       "category": "Utility",
       "maintainer": "Juan Jose de Haro <jjdeharo@gmail.com>"
+    },
+    "win": {
+      "target": [
+        "portable",
+        "zip"
+      ]
+    },
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
     }
   }
 }

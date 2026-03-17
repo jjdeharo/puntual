@@ -30,6 +30,10 @@ export type AlarmInput = {
 };
 
 declare global {
+  const __APP_VERSION__: string;
+  const __APP_LICENSE__: string;
+  const __APP_REPOSITORY__: string;
+
   interface Window {
     alarmApi: {
       getState: () => Promise<AlarmState>;
@@ -39,6 +43,7 @@ declare global {
       deleteAlarm: (id: string) => Promise<AlarmState>;
       setLaunchAtLogin: (enabled: boolean) => Promise<AlarmState>;
       showWindow: () => Promise<void>;
+      openExternal: (url: string) => Promise<void>;
       onState: (listener: (state: AlarmState) => void) => () => void;
       onRingState: (listener: (ringing: boolean) => void) => () => void;
     };

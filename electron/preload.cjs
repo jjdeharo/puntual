@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("alarmApi", {
   deleteAlarm: (id) => ipcRenderer.invoke("alarm:delete", id),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke("settings:set-launch-at-login", enabled),
   showWindow: () => ipcRenderer.invoke("app:show-window"),
+  openExternal: (url) => ipcRenderer.invoke("app:open-external", url),
   onState: (listener) => {
     const wrapped = (_event, state) => listener(state);
     ipcRenderer.on("state:sync", wrapped);

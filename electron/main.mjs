@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, nativeTheme } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, nativeTheme, shell } from "electron";
 import { createAlarmStore } from "./alarm-store.mjs";
 import { createAlarmScheduler } from "./scheduler.mjs";
 
@@ -22,7 +22,7 @@ function getWindowUrl() {
   if (process.env.VITE_DEV_SERVER_URL) {
     return process.env.VITE_DEV_SERVER_URL;
   }
-  return `file://${path.join(__dirname, "..", "dist", "index.html")}`;
+  return `file://${path.join(__dirname, "..", "dist", "renderer", "index.html")}`;
 }
 
 function createWindow() {
@@ -233,6 +233,12 @@ app.whenReady().then(() => {
   sendState(store.getState());
 
   ipcMain.handle("alarm:get-state", () => store.getState());
+  ipcMain.handle("app:open-external", (_event, targetUrl) => {
+    if (typeof targetUrl !== "string" || !/^https?:\/\//.test(targetUrl)) {
+      throw new Error("URL externa no válida.");
+    }
+    return shell.openExternal(targetUrl);
+  });
 
   ipcMain.handle("alarm:create", (_event, payload) => {
     const input = validateAlarmInput(payload, false);
