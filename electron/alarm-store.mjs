@@ -1,0 +1,105 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const DEFAULT_STATE = {
+  alarms: [],
+  settings: {
+    launchAtLogin: true,
+    silenceWhileWindowOpen: false,
+  },
+};
+
+export function createAlarmStore(filePath) {
+  const directory = path.dirname(filePath);
+  let state = loadInitialState(filePath);
+
+  function ensureDirectory() {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+
+  function loadInitialState(targetPath) {
+    try {
+      const raw = fs.readFileSync(targetPath, "utf8");
+      const parsed = JSON.parse(raw);
+      return normalizeState(parsed);
+    } catch {
+      return structuredClone(DEFAULT_STATE);
+    }
+  }
+
+  function persist() {
+    ensureDirectory();
+    const tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(state, null, 2), "utf8");
+    fs.renameSync(tempPath, filePath);
+  }
+
+  function getState() {
+    return structuredClone(state);
+  }
+
+  function replaceState(nextState) {
+    state = normalizeState(nextState);
+    persist();
+    return getState();
+  }
+
+  function mutate(updater) {
+    const nextState = updater(getState());
+    return replaceState(nextState);
+  }
+
+  return {
+    getState,
+    replaceState,
+    mutate,
+  };
+}
+
+function normalizeState(value) {
+  const alarms = Array.isArray(value?.alarms)
+    ? value.alarms
+        .map(normalizeAlarm)
+        .filter(Boolean)
+        .sort((a, b) => a.targetAt - b.targetAt)
+    : [];
+
+  const settings = {
+    ...DEFAULT_STATE.settings,
+    ...(value?.settings && typeof value.settings === "object" ? value.settings : {}),
+  };
+
+  return { alarms, settings };
+}
+
+function normalizeAlarm(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const targetAt = Number(value.targetAt);
+  const createdAt = Number(value.createdAt);
+  const updatedAt = Number(value.updatedAt ?? createdAt ?? Date.now());
+
+  if (!Number.isFinite(targetAt) || !Number.isFinite(createdAt)) {
+    return null;
+  }
+
+  return {
+    id: String(value.id ?? ""),
+    title: String(value.title ?? ""),
+    notes: String(value.notes ?? ""),
+    targetAt,
+    createdAt,
+    updatedAt,
+    soundEnabled: value.soundEnabled !== false,
+    status: normalizeStatus(value.status),
+    acknowledgedAt: Number.isFinite(Number(value.acknowledgedAt))
+      ? Number(value.acknowledgedAt)
+      : null,
+  };
+}
+
+function normalizeStatus(value) {
+  return value === "ringing" || value === "dismissed" ? value : "scheduled";
+}

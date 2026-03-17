@@ -1,0 +1,60 @@
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/fraunces/600.css";
+
+:root {
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--ink-soft);
+  background: #f3f5f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --font-sans: "Manrope", "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --ink-strong: #1f2a36;
+  --ink-soft: #4e5d6d;
+  --ink-faint: #748292;
+  --panel: #fbfcfd;
+  --panel-muted: #f5f7f9;
+  --panel-alert: #fff4ea;
+  --line: #d7dee6;
+  --line-strong: #7b97b6;
+  --line-alert: #efcfad;
+  --accent: #46688c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f3f5f7;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  -webkit-app-region: no-drag;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8a96a1;
+}
