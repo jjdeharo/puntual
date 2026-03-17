@@ -25,7 +25,7 @@ Archivos previstos en cada release:
 Instalación rápida en Debian, Ubuntu, MX Linux y derivadas:
 
 ```bash
-sudo apt install ./puntual_0.1.2_amd64.deb
+sudo apt install ./puntual_0.1.3_amd64.deb
 ```
 
 Ejecutar sin instalar en Linux:

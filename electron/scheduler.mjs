@@ -1,4 +1,5 @@
 import { Notification, app } from "electron";
+import { advanceAlarm } from "./recurrence.mjs";
 
 function normalizeLocale(value) {
   const base = String(value ?? "").toLowerCase().split("-")[0];
@@ -102,16 +103,7 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
     const now = Date.now();
     const nextState = store.mutate((current) => ({
       ...current,
-      alarms: current.alarms.map((alarm) =>
-        alarm.id === id
-          ? {
-              ...alarm,
-              status: "dismissed",
-              acknowledgedAt: now,
-              updatedAt: now,
-            }
-          : alarm
-      ),
+      alarms: current.alarms.map((alarm) => (alarm.id === id ? advanceAlarm(alarm, now) : alarm)),
     }));
 
     updateBeepLoop(nextState);

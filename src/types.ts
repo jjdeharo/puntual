@@ -1,11 +1,32 @@
 export type AlarmStatus = "scheduled" | "ringing" | "dismissed";
 export type AppLocale = "system" | "es" | "ca" | "en";
+export type AlarmRepeatKind = "none" | "daily" | "workdays" | "weekly" | "monthly" | "yearly";
+export type AlarmRepeatEndType = "never" | "onDate" | "afterCount";
+
+export type AlarmRepeat = {
+  kind: AlarmRepeatKind;
+  weekDays: number[];
+  endType: AlarmRepeatEndType;
+  endAt: number | null;
+  maxOccurrences: number | null;
+  occurrenceCount: number;
+  anchorAt: number;
+};
+
+export type AlarmRepeatInput = {
+  kind: AlarmRepeatKind;
+  weekDays: number[];
+  endType: AlarmRepeatEndType;
+  endAt: number | null;
+  maxOccurrences: number | null;
+};
 
 export type Alarm = {
   id: string;
   title: string;
   notes: string;
   targetAt: number;
+  repeat: AlarmRepeat;
   createdAt: number;
   updatedAt: number;
   soundEnabled: boolean;
@@ -29,6 +50,7 @@ export type AlarmInput = {
   notes: string;
   targetAt: number;
   soundEnabled: boolean;
+  repeat: AlarmRepeatInput;
 };
 
 declare global {

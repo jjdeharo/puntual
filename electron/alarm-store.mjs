@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeStoredRepeat } from "./recurrence.mjs";
 
 const DEFAULT_STATE = {
   alarms: [],
@@ -94,6 +95,7 @@ function normalizeAlarm(value) {
     title: String(value.title ?? ""),
     notes: String(value.notes ?? ""),
     targetAt,
+    repeat: normalizeStoredRepeat(value.repeat, targetAt),
     createdAt,
     updatedAt,
     soundEnabled: value.soundEnabled !== false,

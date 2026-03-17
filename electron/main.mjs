@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, nativeTheme, shell } from "electron";
 import { createAlarmStore } from "./alarm-store.mjs";
+import { advanceAlarm, createStoredRepeat } from "./recurrence.mjs";
 import { createAlarmScheduler } from "./scheduler.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -263,12 +264,28 @@ function validateAlarmInput(payload, requireId = false) {
     throw new Error("La alarma debe programarse en el futuro.");
   }
 
+  const repeat = createStoredRepeat(payload?.repeat, targetAt);
+
+  if (repeat.kind === "weekly" && repeat.weekDays.length === 0) {
+    throw new Error("Selecciona al menos un día para la repetición semanal.");
+  }
+  if (repeat.endType === "onDate" && !Number.isFinite(repeat.endAt)) {
+    throw new Error("La fecha de fin no es válida.");
+  }
+  if (repeat.endType === "onDate" && repeat.endAt < targetAt) {
+    throw new Error("La fecha de fin debe ser igual o posterior a la primera alarma.");
+  }
+  if (repeat.endType === "afterCount" && (!Number.isInteger(repeat.maxOccurrences) || repeat.maxOccurrences < 1)) {
+    throw new Error("El número de repeticiones debe ser mayor que cero.");
+  }
+
   return {
     id: requireId ? String(payload.id) : crypto.randomUUID(),
     title,
     notes,
     targetAt,
     soundEnabled,
+    repeat,
   };
 }
 
@@ -342,16 +359,7 @@ app.whenReady().then(() => {
     const now = Date.now();
     const nextState = store.mutate((current) => ({
       ...current,
-      alarms: current.alarms.map((alarm) =>
-        alarm.id === id
-          ? {
-              ...alarm,
-              status: "dismissed",
-              acknowledgedAt: now,
-              updatedAt: now,
-            }
-          : alarm
-      ),
+      alarms: current.alarms.map((alarm) => (alarm.id === id ? advanceAlarm(alarm, now) : alarm)),
     }));
     sendState(nextState);
     scheduler.evaluate(false);
