@@ -269,6 +269,9 @@ function validateAlarmInput(payload, requireId = false) {
   if (repeat.kind === "weekly" && repeat.weekDays.length === 0) {
     throw new Error("Selecciona al menos un día para la repetición semanal.");
   }
+  if (repeat.kind === "monthly" && repeat.monthlyMode === "weekdayOfMonth" && !repeat.monthlyWeekDay) {
+    throw new Error("El patrón mensual no es válido.");
+  }
   if (repeat.endType === "onDate" && !Number.isFinite(repeat.endAt)) {
     throw new Error("La fecha de fin no es válida.");
   }

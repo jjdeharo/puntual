@@ -1,5 +1,7 @@
 const VALID_REPEAT_KINDS = new Set(["none", "daily", "workdays", "weekly", "monthly", "yearly"]);
 const VALID_END_TYPES = new Set(["never", "onDate", "afterCount"]);
+const VALID_MONTHLY_MODES = new Set(["dayOfMonth", "weekdayOfMonth"]);
+const VALID_MONTHLY_WEEKS = new Set([1, 2, 3, 4, -1]);
 
 function normalizeRepeatKind(value) {
   return VALID_REPEAT_KINDS.has(value) ? value : "none";
@@ -21,6 +23,20 @@ function normalizeWeekDays(value) {
   ).sort((left, right) => left - right);
 }
 
+function normalizeMonthlyMode(value) {
+  return VALID_MONTHLY_MODES.has(value) ? value : "dayOfMonth";
+}
+
+function normalizeMonthlyWeek(value) {
+  const week = Number(value);
+  return VALID_MONTHLY_WEEKS.has(week) ? week : 1;
+}
+
+function normalizeMonthlyWeekDay(value) {
+  const day = Number(value);
+  return Number.isInteger(day) && day >= 1 && day <= 7 ? day : null;
+}
+
 function getDayNumber(date) {
   const day = date.getDay();
   return day === 0 ? 7 : day;
@@ -40,6 +56,51 @@ function buildDate(year, monthIndex, day, source) {
     source.getSeconds(),
     source.getMilliseconds()
   );
+}
+
+function getWeekdayOfMonth(year, monthIndex, monthlyWeek, monthlyWeekDay, source) {
+  if (!monthlyWeekDay) {
+    return null;
+  }
+
+  if (monthlyWeek === -1) {
+    const end = new Date(
+      year,
+      monthIndex + 1,
+      0,
+      source.getHours(),
+      source.getMinutes(),
+      source.getSeconds(),
+      source.getMilliseconds()
+    );
+
+    while (getDayNumber(end) !== monthlyWeekDay) {
+      end.setDate(end.getDate() - 1);
+    }
+
+    return end.getTime();
+  }
+
+  const start = new Date(
+    year,
+    monthIndex,
+    1,
+    source.getHours(),
+    source.getMinutes(),
+    source.getSeconds(),
+    source.getMilliseconds()
+  );
+
+  while (getDayNumber(start) !== monthlyWeekDay) {
+    start.setDate(start.getDate() + 1);
+  }
+
+  start.setDate(start.getDate() + (monthlyWeek - 1) * 7);
+  if (start.getMonth() !== monthIndex) {
+    return null;
+  }
+
+  return start.getTime();
 }
 
 function getImmediateNextTargetAt(currentTargetAt, repeat) {
@@ -71,16 +132,14 @@ function getImmediateNextTargetAt(currentTargetAt, repeat) {
       return null;
     }
     case "monthly": {
-      const seed = new Date(
-        current.getFullYear(),
-        current.getMonth() + 1,
-        1,
-        anchor.getHours(),
-        anchor.getMinutes(),
-        anchor.getSeconds(),
-        anchor.getMilliseconds()
-      );
-      return buildDate(seed.getFullYear(), seed.getMonth(), anchor.getDate(), anchor).getTime();
+      const year = current.getMonth() === 11 ? current.getFullYear() + 1 : current.getFullYear();
+      const monthIndex = (current.getMonth() + 1) % 12;
+
+      if (repeat.monthlyMode === "weekdayOfMonth") {
+        return getWeekdayOfMonth(year, monthIndex, repeat.monthlyWeek, repeat.monthlyWeekDay, anchor);
+      }
+
+      return buildDate(year, monthIndex, anchor.getDate(), anchor).getTime();
     }
     case "yearly": {
       return buildDate(current.getFullYear() + 1, anchor.getMonth(), anchor.getDate(), anchor).getTime();
@@ -97,6 +156,12 @@ export function createStoredRepeat(value, anchorAt) {
   return {
     kind,
     weekDays: kind === "weekly" ? normalizeWeekDays(value?.weekDays) : [],
+    monthlyMode: kind === "monthly" ? normalizeMonthlyMode(value?.monthlyMode) : "dayOfMonth",
+    monthlyWeek: kind === "monthly" ? normalizeMonthlyWeek(value?.monthlyWeek) : 1,
+    monthlyWeekDay:
+      kind === "monthly" && normalizeMonthlyMode(value?.monthlyMode) === "weekdayOfMonth"
+        ? normalizeMonthlyWeekDay(value?.monthlyWeekDay)
+        : null,
     endType,
     endAt: kind !== "none" && endType === "onDate" && Number.isFinite(Number(value?.endAt)) ? Number(value.endAt) : null,
     maxOccurrences:

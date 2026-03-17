@@ -3,7 +3,17 @@ import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
 import { ca, enUS, es } from "date-fns/locale";
 import { Bell, BellOff, Clock3, ExternalLink, Info, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
 import "./App.css";
-import type { Alarm, AlarmRepeat, AlarmRepeatEndType, AlarmRepeatInput, AlarmRepeatKind, AlarmState, AppLocale } from "./types";
+import type {
+  Alarm,
+  AlarmMonthlyMode,
+  AlarmMonthlyWeek,
+  AlarmRepeat,
+  AlarmRepeatEndType,
+  AlarmRepeatInput,
+  AlarmRepeatKind,
+  AlarmState,
+  AppLocale,
+} from "./types";
 
 const ALARM_SOUND_PATH =
   "file:///home/jjdeharo/Documentos/github/escritorio-digital.github.io/dist/sounds/alarm-clock-elapsed.oga";
@@ -45,14 +55,22 @@ const LOCALE_LABELS: Record<AppLocale, { es: string; ca: string; en: string }> =
 };
 
 const WEEKDAY_OPTIONS = [
-  { value: 1, es: "L", ca: "Dl", en: "Mo" },
-  { value: 2, es: "M", ca: "Dt", en: "Tu" },
-  { value: 3, es: "X", ca: "Dc", en: "We" },
-  { value: 4, es: "J", ca: "Dj", en: "Th" },
-  { value: 5, es: "V", ca: "Dv", en: "Fr" },
-  { value: 6, es: "S", ca: "Ds", en: "Sa" },
-  { value: 7, es: "D", ca: "Dg", en: "Su" },
+  { value: 1, short: { es: "L", ca: "Dl", en: "Mo" }, long: { es: "lunes", ca: "dilluns", en: "Monday" } },
+  { value: 2, short: { es: "M", ca: "Dt", en: "Tu" }, long: { es: "martes", ca: "dimarts", en: "Tuesday" } },
+  { value: 3, short: { es: "X", ca: "Dc", en: "We" }, long: { es: "miércoles", ca: "dimecres", en: "Wednesday" } },
+  { value: 4, short: { es: "J", ca: "Dj", en: "Th" }, long: { es: "jueves", ca: "dijous", en: "Thursday" } },
+  { value: 5, short: { es: "V", ca: "Dv", en: "Fr" }, long: { es: "viernes", ca: "divendres", en: "Friday" } },
+  { value: 6, short: { es: "S", ca: "Ds", en: "Sa" }, long: { es: "sábado", ca: "dissabte", en: "Saturday" } },
+  { value: 7, short: { es: "D", ca: "Dg", en: "Su" }, long: { es: "domingo", ca: "diumenge", en: "Sunday" } },
 ] as const;
+
+const MONTHLY_WEEK_OPTIONS: Array<{ value: AlarmMonthlyWeek; labels: Record<Exclude<AppLocale, "system">, string> }> = [
+  { value: 1, labels: { es: "primer", ca: "primer", en: "first" } },
+  { value: 2, labels: { es: "segundo", ca: "segon", en: "second" } },
+  { value: 3, labels: { es: "tercer", ca: "tercer", en: "third" } },
+  { value: 4, labels: { es: "cuarto", ca: "quart", en: "fourth" } },
+  { value: -1, labels: { es: "último", ca: "últim", en: "last" } },
+];
 
 const MESSAGES = {
   es: {
@@ -83,6 +101,11 @@ const MESSAGES = {
     repeatMonthly: "Mensualmente",
     repeatYearly: "Anualmente",
     repeatDays: "Días",
+    monthlyPattern: "Patrón mensual",
+    monthlyByDayOfMonth: "Mismo día del mes",
+    monthlyByWeekdayOfMonth: "Día de la semana",
+    monthlyWeek: "Semana",
+    monthlyWeekDay: "Día de la semana",
     ends: "Finaliza",
     never: "Nunca",
     endsOnDate: "En fecha",
@@ -90,6 +113,7 @@ const MESSAGES = {
     occurrences: "Veces",
     noEndDate: "sin fecha de fin",
     until: "hasta",
+    dayOfMonthPrefix: "día",
     notes: "Notas",
     cancel: "Cancelar",
     save: "Guardar",
@@ -159,6 +183,11 @@ const MESSAGES = {
     repeatMonthly: "Mensualment",
     repeatYearly: "Anualment",
     repeatDays: "Dies",
+    monthlyPattern: "Patró mensual",
+    monthlyByDayOfMonth: "Mateix dia del mes",
+    monthlyByWeekdayOfMonth: "Dia de la setmana",
+    monthlyWeek: "Setmana",
+    monthlyWeekDay: "Dia de la setmana",
     ends: "Finalitza",
     never: "Mai",
     endsOnDate: "En data",
@@ -166,6 +195,7 @@ const MESSAGES = {
     occurrences: "Vegades",
     noEndDate: "sense data de fi",
     until: "fins al",
+    dayOfMonthPrefix: "dia",
     notes: "Notes",
     cancel: "Cancel·la",
     save: "Desa",
@@ -235,6 +265,11 @@ const MESSAGES = {
     repeatMonthly: "Monthly",
     repeatYearly: "Yearly",
     repeatDays: "Days",
+    monthlyPattern: "Monthly pattern",
+    monthlyByDayOfMonth: "Same day of month",
+    monthlyByWeekdayOfMonth: "Weekday of month",
+    monthlyWeek: "Week",
+    monthlyWeekDay: "Weekday",
     ends: "Ends",
     never: "Never",
     endsOnDate: "On date",
@@ -242,6 +277,7 @@ const MESSAGES = {
     occurrences: "Times",
     noEndDate: "without end date",
     until: "until",
+    dayOfMonthPrefix: "day",
     notes: "Notes",
     cancel: "Cancel",
     save: "Save",
@@ -317,8 +353,35 @@ function getWeekdayNumber(timestamp: number) {
   return day === 0 ? 7 : day;
 }
 
+function getMonthlyWeekFromDate(date: Date): AlarmMonthlyWeek {
+  const candidate = new Date(date);
+  candidate.setDate(candidate.getDate() + 7);
+  if (candidate.getMonth() !== date.getMonth()) {
+    return -1;
+  }
+
+  return Math.min(Math.ceil(date.getDate() / 7), 4) as Exclude<AlarmMonthlyWeek, -1>;
+}
+
+function getMonthlyPatternFromTimestamp(timestamp: number) {
+  const date = new Date(timestamp);
+  return {
+    monthlyWeek: getMonthlyWeekFromDate(date),
+    monthlyWeekDay: getWeekdayNumber(timestamp),
+  };
+}
+
+function getWeekdayLongName(day: number, locale: Exclude<AppLocale, "system">) {
+  return WEEKDAY_OPTIONS.find((option) => option.value === day)?.long[locale] ?? "";
+}
+
+function getMonthlyWeekLabel(week: AlarmMonthlyWeek, locale: Exclude<AppLocale, "system">) {
+  return MONTHLY_WEEK_OPTIONS.find((option) => option.value === week)?.labels[locale] ?? "";
+}
+
 function createDefaultComposer() {
   const now = new Date();
+  const monthlyPattern = getMonthlyPatternFromTimestamp(now.getTime());
   return {
     title: "",
     notes: "",
@@ -329,6 +392,9 @@ function createDefaultComposer() {
     soundEnabled: true,
     repeatKind: "none" as AlarmRepeatKind,
     repeatWeekDays: [] as number[],
+    repeatMonthlyMode: "dayOfMonth" as AlarmMonthlyMode,
+    repeatMonthlyWeek: monthlyPattern.monthlyWeek,
+    repeatMonthlyWeekDay: monthlyPattern.monthlyWeekDay,
     repeatEndType: "never" as AlarmRepeatEndType,
     repeatEndDate: "",
     repeatCount: "10",
@@ -436,6 +502,9 @@ type ComposerState = {
   soundEnabled: boolean;
   repeatKind: AlarmRepeatKind;
   repeatWeekDays: number[];
+  repeatMonthlyMode: AlarmMonthlyMode;
+  repeatMonthlyWeek: AlarmMonthlyWeek;
+  repeatMonthlyWeekDay: number;
   repeatEndType: AlarmRepeatEndType;
   repeatEndDate: string;
   repeatCount: string;
@@ -460,8 +529,19 @@ function formatRepeatLabel(kind: AlarmRepeatKind, messages: MessageCatalog) {
 
 function formatWeekDayList(weekDays: number[], locale: Exclude<AppLocale, "system">) {
   return WEEKDAY_OPTIONS.filter((option) => weekDays.includes(option.value))
-    .map((option) => option[locale])
+    .map((option) => option.short[locale])
     .join(", ");
+}
+
+function formatMonthlySummary(repeat: AlarmRepeat, locale: Exclude<AppLocale, "system">, messages: MessageCatalog) {
+  if (repeat.monthlyMode === "weekdayOfMonth" && repeat.monthlyWeekDay) {
+    return `${messages.repeatMonthly}: ${getMonthlyWeekLabel(repeat.monthlyWeek, locale)} ${getWeekdayLongName(
+      repeat.monthlyWeekDay,
+      locale
+    )}`;
+  }
+
+  return `${messages.repeatMonthly}: ${messages.dayOfMonthPrefix} ${new Date(repeat.anchorAt).getDate()}`;
 }
 
 function formatRepeatSummary(repeat: AlarmRepeat, locale: Exclude<AppLocale, "system">, messages: MessageCatalog) {
@@ -472,6 +552,8 @@ function formatRepeatSummary(repeat: AlarmRepeat, locale: Exclude<AppLocale, "sy
   const base =
     repeat.kind === "weekly" && repeat.weekDays.length > 0
       ? `${messages.repeatWeekly}: ${formatWeekDayList(repeat.weekDays, locale)}`
+      : repeat.kind === "monthly"
+        ? formatMonthlySummary(repeat, locale, messages)
       : formatRepeatLabel(repeat.kind, messages);
 
   if (repeat.endType === "onDate" && repeat.endAt) {
@@ -492,6 +574,9 @@ function buildRepeatInput(
     return {
       kind: "none",
       weekDays: [],
+      monthlyMode: "dayOfMonth",
+      monthlyWeek: 1,
+      monthlyWeekDay: null,
       endType: "never",
       endAt: null,
       maxOccurrences: null,
@@ -507,6 +592,11 @@ function buildRepeatInput(
     return null;
   }
 
+  const monthlyWeekDay =
+    composer.repeatKind === "monthly" && composer.repeatMonthlyMode === "weekdayOfMonth"
+      ? composer.repeatMonthlyWeekDay
+      : null;
+
   if (composer.repeatEndType === "onDate") {
     const endAt = toEndOfDayTimestamp(composer.repeatEndDate);
     if (endAt === null || endAt < targetAt) {
@@ -515,6 +605,9 @@ function buildRepeatInput(
     return {
       kind: composer.repeatKind,
       weekDays,
+      monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
+      monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
+      monthlyWeekDay,
       endType: "onDate",
       endAt,
       maxOccurrences: null,
@@ -529,6 +622,9 @@ function buildRepeatInput(
     return {
       kind: composer.repeatKind,
       weekDays,
+      monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
+      monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
+      monthlyWeekDay,
       endType: "afterCount",
       endAt: null,
       maxOccurrences,
@@ -538,6 +634,9 @@ function buildRepeatInput(
   return {
     kind: composer.repeatKind,
     weekDays,
+    monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
+    monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
+    monthlyWeekDay,
     endType: "never",
     endAt: null,
     maxOccurrences: null,
@@ -668,6 +767,7 @@ function App() {
   function startEditing(alarm: Alarm) {
     setEditingId(alarm.id);
     setError("");
+    const monthlyPattern = getMonthlyPatternFromTimestamp(alarm.targetAt);
     setComposer({
       title: alarm.title,
       notes: alarm.notes,
@@ -678,6 +778,12 @@ function App() {
       soundEnabled: alarm.soundEnabled,
       repeatKind: alarm.repeat.kind,
       repeatWeekDays: [...alarm.repeat.weekDays],
+      repeatMonthlyMode: alarm.repeat.monthlyMode,
+      repeatMonthlyWeek: alarm.repeat.kind === "monthly" ? alarm.repeat.monthlyWeek : monthlyPattern.monthlyWeek,
+      repeatMonthlyWeekDay:
+        alarm.repeat.kind === "monthly"
+          ? (alarm.repeat.monthlyWeekDay ?? monthlyPattern.monthlyWeekDay)
+          : monthlyPattern.monthlyWeekDay,
       repeatEndType: alarm.repeat.kind === "none" ? "never" : alarm.repeat.endType,
       repeatEndDate: alarm.repeat.endAt ? toInputDate(new Date(alarm.repeat.endAt)) : "",
       repeatCount: String(alarm.repeat.maxOccurrences ?? 10),
@@ -703,6 +809,9 @@ function App() {
       repeat = {
         kind: "none",
         weekDays: [],
+        monthlyMode: "dayOfMonth",
+        monthlyWeek: 1,
+        monthlyWeekDay: null,
         endType: "never",
         endAt: null,
         maxOccurrences: null,
@@ -905,6 +1014,9 @@ function App() {
                     value={composer.targetDate}
                     onChange={(event) => {
                       const nextDate = event.target.value;
+                      const nextTargetAt = parseAbsoluteTarget(nextDate, composer.targetTime);
+                      const nextMonthlyPattern =
+                        Number.isFinite(nextTargetAt) ? getMonthlyPatternFromTimestamp(nextTargetAt) : null;
                       setComposer((current) => ({
                         ...current,
                         targetDate: nextDate,
@@ -912,6 +1024,14 @@ function App() {
                           current.repeatKind === "weekly" && current.repeatWeekDays.length === 0 && nextDate && current.targetTime
                             ? [getWeekdayNumber(parseAbsoluteTarget(nextDate, current.targetTime))]
                             : current.repeatWeekDays,
+                        repeatMonthlyWeek:
+                          current.repeatKind === "monthly" && current.repeatMonthlyMode === "weekdayOfMonth" && nextMonthlyPattern
+                            ? nextMonthlyPattern.monthlyWeek
+                            : current.repeatMonthlyWeek,
+                        repeatMonthlyWeekDay:
+                          current.repeatKind === "monthly" && current.repeatMonthlyMode === "weekdayOfMonth" && nextMonthlyPattern
+                            ? nextMonthlyPattern.monthlyWeekDay
+                            : current.repeatMonthlyWeekDay,
                       }));
                     }}
                   />
@@ -934,6 +1054,8 @@ function App() {
                   onChange={(event) => {
                     const nextKind = event.target.value as AlarmRepeatKind;
                     const nextTargetAt = parseAbsoluteTarget(composer.targetDate, composer.targetTime);
+                    const nextMonthlyPattern =
+                      Number.isFinite(nextTargetAt) ? getMonthlyPatternFromTimestamp(nextTargetAt) : null;
                     setComposer((current) => ({
                       ...current,
                       repeatKind: nextKind,
@@ -945,6 +1067,10 @@ function App() {
                               ? [getWeekdayNumber(nextTargetAt)]
                               : []
                           : [],
+                      repeatMonthlyMode: nextKind === "monthly" ? current.repeatMonthlyMode : "dayOfMonth",
+                      repeatMonthlyWeek: nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeek : current.repeatMonthlyWeek,
+                      repeatMonthlyWeekDay:
+                        nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeekDay : current.repeatMonthlyWeekDay,
                       repeatEndType: nextKind === "none" ? "never" : current.repeatEndType,
                     }));
                   }}
@@ -977,12 +1103,89 @@ function App() {
                             }))
                           }
                         >
-                          {option[appLocale]}
+                          {option.short[appLocale]}
                         </button>
                       );
                     })}
                   </div>
                 </div>
+              ) : null}
+
+              {composer.repeatKind === "monthly" ? (
+                <>
+                  <label className="field-block">
+                    <span>{messages.monthlyPattern}</span>
+                    <select
+                      className="settings-select"
+                      value={composer.repeatMonthlyMode}
+                      onChange={(event) => {
+                        const nextMode = event.target.value as AlarmMonthlyMode;
+                        const nextTargetAt = parseAbsoluteTarget(composer.targetDate, composer.targetTime);
+                        const nextMonthlyPattern =
+                          Number.isFinite(nextTargetAt) ? getMonthlyPatternFromTimestamp(nextTargetAt) : null;
+                        setComposer((current) => ({
+                          ...current,
+                          repeatMonthlyMode: nextMode,
+                          repeatMonthlyWeek:
+                            nextMode === "weekdayOfMonth" && nextMonthlyPattern
+                              ? nextMonthlyPattern.monthlyWeek
+                              : current.repeatMonthlyWeek,
+                          repeatMonthlyWeekDay:
+                            nextMode === "weekdayOfMonth" && nextMonthlyPattern
+                              ? nextMonthlyPattern.monthlyWeekDay
+                              : current.repeatMonthlyWeekDay,
+                        }));
+                      }}
+                    >
+                      <option value="dayOfMonth">{messages.monthlyByDayOfMonth}</option>
+                      <option value="weekdayOfMonth">{messages.monthlyByWeekdayOfMonth}</option>
+                    </select>
+                  </label>
+
+                  {composer.repeatMonthlyMode === "weekdayOfMonth" ? (
+                    <div className="field-grid">
+                      <label className="field-block">
+                        <span>{messages.monthlyWeek}</span>
+                        <select
+                          className="settings-select"
+                          value={String(composer.repeatMonthlyWeek)}
+                          onChange={(event) =>
+                            setComposer((current) => ({
+                              ...current,
+                              repeatMonthlyWeek: Number.parseInt(event.target.value, 10) as AlarmMonthlyWeek,
+                            }))
+                          }
+                        >
+                          {MONTHLY_WEEK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.labels[appLocale]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="field-block">
+                        <span>{messages.monthlyWeekDay}</span>
+                        <select
+                          className="settings-select"
+                          value={String(composer.repeatMonthlyWeekDay)}
+                          onChange={(event) =>
+                            setComposer((current) => ({
+                              ...current,
+                              repeatMonthlyWeekDay: Number.parseInt(event.target.value, 10),
+                            }))
+                          }
+                        >
+                          {WEEKDAY_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.long[appLocale]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
 
               {composer.repeatKind !== "none" ? (
@@ -1033,6 +1236,9 @@ function App() {
                       {
                         kind: composer.repeatKind,
                         weekDays: composer.repeatWeekDays,
+                        monthlyMode: composer.repeatMonthlyMode,
+                        monthlyWeek: composer.repeatMonthlyWeek,
+                        monthlyWeekDay: composer.repeatMonthlyMode === "weekdayOfMonth" ? composer.repeatMonthlyWeekDay : null,
                         endType: composer.repeatEndType,
                         endAt: composer.repeatEndType === "onDate" ? toEndOfDayTimestamp(composer.repeatEndDate) : null,
                         maxOccurrences:
