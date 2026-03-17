@@ -61,6 +61,7 @@ function normalizeState(value) {
     ? value.alarms
         .map(normalizeAlarm)
         .filter(Boolean)
+        .filter((alarm) => alarm.status !== "dismissed")
         .sort((a, b) => a.targetAt - b.targetAt)
     : [];
 

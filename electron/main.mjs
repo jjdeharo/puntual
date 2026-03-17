@@ -1,11 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, nativeTheme } from "electron";
 import { createAlarmStore } from "./alarm-store.mjs";
 import { createAlarmScheduler } from "./scheduler.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+const isAutoLaunch = process.argv.includes("--autostart");
 
 let mainWindow = null;
 let tray = null;
@@ -26,13 +27,13 @@ function getWindowUrl() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 980,
-    height: 760,
-    minWidth: 860,
-    minHeight: 620,
+    width: 860,
+    height: 560,
+    minWidth: 760,
+    minHeight: 500,
     show: false,
     title: "Puntual",
-    backgroundColor: "#f3f5f7",
+    backgroundColor: getWindowBackgroundColor(),
     autoHideMenuBar: true,
     titleBarStyle: "hiddenInset",
     webPreferences: {
@@ -61,6 +62,9 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
+    if (isAutoLaunch) {
+      return;
+    }
     mainWindow?.show();
   });
 
@@ -77,6 +81,10 @@ function createWindow() {
   }
 }
 
+function getWindowBackgroundColor() {
+  return nativeTheme.shouldUseDarkColors ? "#0b1117" : "#f3f5f7";
+}
+
 function createTray() {
   tray = new Tray(createTrayIcon());
   tray.setToolTip("Puntual");
@@ -87,18 +95,9 @@ function createTray() {
 }
 
 function createTrayIcon() {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <g fill="none" stroke="#f7f9fb" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 18 14 10"/>
-        <path d="M44 18 50 10"/>
-        <circle cx="32" cy="34" r="18"/>
-        <path d="M32 24v11l8 6"/>
-      </g>
-    </svg>
-  `;
-  const icon = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`);
-  return icon.resize({ width: 22, height: 22 });
+  return nativeImage
+    .createFromPath(path.join(__dirname, "tray-icon.png"))
+    .resize({ width: 18, height: 18 });
 }
 
 function toggleWindow() {
@@ -220,9 +219,14 @@ function validateAlarmInput(payload, requireId = false) {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+  nativeTheme.themeSource = "system";
+  nativeTheme.on("updated", () => {
+    mainWindow?.setBackgroundColor(getWindowBackgroundColor());
+  });
 
   app.setLoginItemSettings({
     openAtLogin: store.getState().settings.launchAtLogin,
+    args: ["--autostart"],
   });
 
   scheduler.start();
@@ -312,7 +316,7 @@ app.whenReady().then(() => {
       },
     }));
 
-    app.setLoginItemSettings({ openAtLogin: launchAtLogin });
+    app.setLoginItemSettings({ openAtLogin: launchAtLogin, args: ["--autostart"] });
     sendState(nextState);
     return nextState;
   });

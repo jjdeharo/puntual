@@ -63,6 +63,26 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
     }
   }
 
+  function dismissAlarmById(id) {
+    const now = Date.now();
+    const nextState = store.mutate((current) => ({
+      ...current,
+      alarms: current.alarms.map((alarm) =>
+        alarm.id === id
+          ? {
+              ...alarm,
+              status: "dismissed",
+              acknowledgedAt: now,
+              updatedAt: now,
+            }
+          : alarm
+      ),
+    }));
+
+    updateBeepLoop(nextState);
+    onStateChange(nextState);
+  }
+
   function updateBeepLoop(state) {
     const nextIds = new Set(
       state.alarms
@@ -83,9 +103,14 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
   function showNotification(alarm, recovered) {
     const notification = new Notification({
       title: recovered ? "Alarma pendiente al volver a iniciar" : "Alarma activada",
-      body: ringMessage(alarm),
+      body: `${ringMessage(alarm)}. Haz clic para detener.`,
       urgency: "critical",
-      silent: !alarm.soundEnabled,
+      // The renderer is responsible for alarm audio so the system notification stays silent.
+      silent: true,
+    });
+
+    notification.on("click", () => {
+      dismissAlarmById(alarm.id);
     });
 
     notification.show();

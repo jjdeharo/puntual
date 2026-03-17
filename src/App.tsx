@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
 import { es } from "date-fns/locale";
-import { AlarmClockCheck, Bell, BellOff, Plus, Power, Trash2 } from "lucide-react";
+import { Bell, BellOff, Clock3, Plus, Trash2 } from "lucide-react";
 import "./App.css";
 import type { Alarm, AlarmState } from "./types";
+
+const ALARM_SOUND_PATH =
+  "file:///home/jjdeharo/Documentos/github/escritorio-digital.github.io/dist/sounds/alarm-clock-elapsed.oga";
 
 const fallbackState: AlarmState = {
   alarms: [],
@@ -18,25 +21,36 @@ function toInputDateTime(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
+function createDefaultComposer() {
+  return {
+    title: "",
+    notes: "",
+    targetAt: toInputDateTime(new Date()),
+    countdownMinutes: "5",
+    countdownSeconds: "0",
+    soundEnabled: true,
+  };
+}
+
 function formatTargetDate(timestamp: number) {
   const date = new Date(timestamp);
 
   if (isToday(date)) {
-    return `Hoy, ${format(date, "HH:mm", { locale: es })}`;
+    return `Hoy ${format(date, "HH:mm", { locale: es })}`;
   }
 
   if (isTomorrow(date)) {
-    return `Mañana, ${format(date, "HH:mm", { locale: es })}`;
+    return `Mañana ${format(date, "HH:mm", { locale: es })}`;
   }
 
-  return format(date, "EEE d MMM, HH:mm", { locale: es });
+  return format(date, "d MMM, HH:mm", { locale: es });
 }
 
 function formatRemaining(timestamp: number, referenceNow: number) {
   const diff = timestamp - referenceNow;
 
   if (diff <= 0) {
-    return "Ahora mismo";
+    return "Ahora";
   }
 
   return formatDistanceStrict(timestamp, referenceNow, {
@@ -49,23 +63,20 @@ type ComposerState = {
   title: string;
   notes: string;
   targetAt: string;
+  countdownMinutes: string;
+  countdownSeconds: string;
   soundEnabled: boolean;
 };
 
 function App() {
   const [state, setState] = useState<AlarmState>(fallbackState);
-  const [composer, setComposer] = useState<ComposerState>({
-    title: "",
-    notes: "",
-    targetAt: "",
-    soundEnabled: true,
-  });
+  const [composer, setComposer] = useState<ComposerState>(createDefaultComposer);
+  const [scheduleMode, setScheduleMode] = useState<"absolute" | "countdown">("countdown");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [ringing, setRinging] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const alarmIntervalRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -94,56 +105,17 @@ function App() {
   }, []);
 
   useEffect(() => {
-    async function playPulse() {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) {
-        return;
-      }
-
-      const context = audioContextRef.current ?? new AudioCtx();
-      audioContextRef.current = context;
-
-      if (context.state === "suspended") {
-        await context.resume();
-      }
-
-      const startAt = context.currentTime;
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-
-      oscillator.type = "square";
-      oscillator.frequency.setValueAtTime(880, startAt);
-      gain.gain.setValueAtTime(0.0001, startAt);
-      gain.gain.exponentialRampToValueAtTime(0.12, startAt + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.22);
-
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(startAt);
-      oscillator.stop(startAt + 0.24);
-    }
+    const audio = audioRef.current ?? new Audio(ALARM_SOUND_PATH);
+    audioRef.current = audio;
+    audio.loop = true;
 
     if (!ringing) {
-      if (alarmIntervalRef.current !== null) {
-        window.clearInterval(alarmIntervalRef.current);
-        alarmIntervalRef.current = null;
-      }
+      audio.pause();
+      audio.currentTime = 0;
       return;
     }
 
-    void playPulse();
-    alarmIntervalRef.current = window.setInterval(() => {
-      void playPulse();
-    }, 1400);
-
-    return () => {
-      if (alarmIntervalRef.current !== null) {
-        window.clearInterval(alarmIntervalRef.current);
-        alarmIntervalRef.current = null;
-      }
-    };
+    void audio.play().catch(() => undefined);
   }, [ringing]);
 
   const scheduled = useMemo(
@@ -156,21 +128,33 @@ function App() {
     [state.alarms]
   );
 
-  const dismissed = useMemo(
-    () => state.alarms.filter((alarm) => alarm.status === "dismissed").sort((a, b) => b.updatedAt - a.updatedAt),
-    [state.alarms]
-  );
-
   const nextAlarm = scheduled[0] ?? null;
-  const totalWithSound = scheduled.filter((alarm) => alarm.soundEnabled).length;
+  const countdownDurationMs = useMemo(() => {
+    const minutes = Number(composer.countdownMinutes || 0);
+    const seconds = Number(composer.countdownSeconds || 0);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return null;
+    }
+    const totalMs = Math.max(0, minutes) * 60_000 + Math.max(0, seconds) * 1_000;
+    return totalMs > 0 ? totalMs : null;
+  }, [composer.countdownMinutes, composer.countdownSeconds]);
+  const previewTargetAt = useMemo(() => {
+    if (scheduleMode === "countdown") {
+      return countdownDurationMs ? now + countdownDurationMs : null;
+    }
+    const parsed = new Date(composer.targetAt).getTime();
+    return Number.isFinite(parsed) && parsed > now ? parsed : null;
+  }, [composer.targetAt, countdownDurationMs, now, scheduleMode]);
+  const headerTargetAt = nextAlarm?.targetAt ?? previewTargetAt;
+  const headerTargetLabel = nextAlarm
+    ? formatTargetDate(nextAlarm.targetAt)
+    : previewTargetAt
+      ? `Vista previa: ${formatTargetDate(previewTargetAt)}`
+      : "Sin próxima alarma";
 
   function resetComposer() {
-    setComposer({
-      title: "",
-      notes: "",
-      targetAt: "",
-      soundEnabled: true,
-    });
+    setComposer(createDefaultComposer());
+    setScheduleMode("countdown");
     setEditingId(null);
     setError("");
   }
@@ -182,17 +166,23 @@ function App() {
       title: alarm.title,
       notes: alarm.notes,
       targetAt: toInputDateTime(new Date(alarm.targetAt)),
+      countdownMinutes: "5",
+      countdownSeconds: "0",
       soundEnabled: alarm.soundEnabled,
     });
+    setScheduleMode("absolute");
   }
 
   async function submitAlarm(event: React.FormEvent) {
     event.preventDefault();
     setError("");
 
-    const targetAt = new Date(composer.targetAt).getTime();
+    const targetAt =
+      scheduleMode === "countdown"
+        ? Date.now() + (countdownDurationMs ?? NaN)
+        : new Date(composer.targetAt).getTime();
     if (!Number.isFinite(targetAt)) {
-      setError("La fecha y la hora no son válidas.");
+      setError(scheduleMode === "countdown" ? "Cuenta atrás inválida." : "Fecha inválida.");
       return;
     }
 
@@ -211,7 +201,7 @@ function App() {
       }
       resetComposer();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "No se pudo guardar la alarma.");
+      setError(caughtError instanceof Error ? caughtError.message : "No se pudo guardar.");
     }
   }
 
@@ -228,226 +218,189 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar panel">
-        <div className="topbar-copy">
-          <span className="eyebrow">Puntual</span>
-          <h1>Recordatorios directos y persistentes</h1>
-          <p>Ventana compacta, bandeja visible y avisos claros.</p>
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark">
+            <Clock3 size={13} />
+          </div>
+          <div className="brand-copy">
+            <strong>Puntual</strong>
+            <span>{now ? format(new Date(now), "EEEE d MMMM, HH:mm", { locale: es }) : ""}</span>
+          </div>
         </div>
 
-        <div className="topbar-meta">
-          <div className="mini-stat">
-            <span>Próxima</span>
-            <strong>{nextAlarm ? formatTargetDate(nextAlarm.targetAt) : "Sin programar"}</strong>
+        <div className="topbar-center">
+          <div className="status-line">
+            <span className={`state-chip ${ringing ? "alert" : ""}`}>{ringing ? "Sonando" : "En espera"}</span>
+            <strong>{headerTargetAt ? formatRemaining(headerTargetAt, now) : "Sin alarmas"}</strong>
           </div>
-          <div className={`mini-stat ${ringing ? "alert" : ""}`}>
-            <span>Estado</span>
-            <strong>{ringing ? "Sonando" : "En espera"}</strong>
-          </div>
+          <span className="next-line">{headerTargetLabel}</span>
         </div>
+
+        <label className="checkbox-inline prominent topbar-checkbox">
+          <input
+            type="checkbox"
+            checked={state.settings.launchAtLogin}
+            onChange={(event) => window.alarmApi.setLaunchAtLogin(event.target.checked)}
+          />
+          <span>Iniciar Puntual con el sistema</span>
+        </label>
       </header>
 
-      <section className="overview-grid">
-        <article className="overview-card">
-          <span>Activas</span>
-          <strong>{scheduled.length}</strong>
-          <p>{totalWithSound} con sonido</p>
-        </article>
+      <section className="main-grid">
+        <form className="composer" onSubmit={submitAlarm}>
+          <div className="section-head">
+            <h1>{editingId ? "Editar alarma" : "Nueva alarma"}</h1>
+          </div>
 
-        <article className="overview-card">
-          <span>Siguiente</span>
-          <strong>{nextAlarm ? (now > 0 ? formatRemaining(nextAlarm.targetAt, now) : "Calculando...") : "Sin alarmas"}</strong>
-          <p>{nextAlarm ? formatTargetDate(nextAlarm.targetAt) : "Programa una alarma nueva."}</p>
-        </article>
+          <input
+            value={composer.title}
+            onChange={(event) => setComposer((current) => ({ ...current, title: event.target.value }))}
+            placeholder="Título"
+          />
 
-        <article className="overview-card">
-          <span>En curso</span>
-          <strong>{ringingAlarms.length}</strong>
-          <p>{ringingAlarms.length > 0 ? "Requieren descarte" : "Nada activo ahora"}</p>
-        </article>
-      </section>
-
-      <section className="content-grid">
-        <form className="composer-card panel" onSubmit={submitAlarm}>
-          <div className="panel-header">
-            <div>
-              <span className="panel-kicker">{editingId ? "Editar" : "Nueva"}</span>
-              <h2>{editingId ? "Actualizar alarma" : "Crear alarma"}</h2>
-            </div>
-            <button type="submit" className="primary-button">
-              <Plus size={14} />
-              {editingId ? "Guardar" : "Añadir"}
+          <div className="mode-row">
+            <button
+              type="button"
+              className={scheduleMode === "countdown" ? "toggle-button active" : "toggle-button"}
+              onClick={() => setScheduleMode("countdown")}
+            >
+              Cuenta atrás
+            </button>
+            <button
+              type="button"
+              className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
+              onClick={() => setScheduleMode("absolute")}
+            >
+              Fecha y hora
             </button>
           </div>
 
-          <label className="field">
-            <span>Título</span>
-            <input
-              value={composer.title}
-              onChange={(event) => setComposer((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Clase, descanso, reunión..."
-            />
-          </label>
-
-          <div className="field-row">
-            <label className="field">
-              <span>Fecha y hora</span>
+          {scheduleMode === "countdown" ? (
+            <div className="countdown-row">
               <input
-                type="datetime-local"
-                value={composer.targetAt}
+                type="number"
+                min="0"
+                value={composer.countdownMinutes}
                 onChange={(event) =>
-                  setComposer((current) => ({ ...current, targetAt: event.target.value }))
+                  setComposer((current) => ({ ...current, countdownMinutes: event.target.value }))
                 }
+                placeholder="Min"
               />
-            </label>
-
-            <label className="toggle-card">
-              <span>Sonido</span>
-              <button
-                type="button"
-                className={composer.soundEnabled ? "toggle-button active" : "toggle-button"}
-                onClick={() =>
-                  setComposer((current) => ({ ...current, soundEnabled: !current.soundEnabled }))
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={composer.countdownSeconds}
+                onChange={(event) =>
+                  setComposer((current) => ({ ...current, countdownSeconds: event.target.value }))
                 }
-              >
-                {composer.soundEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-                {composer.soundEnabled ? "Activo" : "Mudo"}
-              </button>
-            </label>
+                placeholder="Seg"
+              />
+            </div>
+          ) : (
+            <input
+              type="datetime-local"
+              value={composer.targetAt}
+              onChange={(event) => setComposer((current) => ({ ...current, targetAt: event.target.value }))}
+            />
+          )}
+
+          <div className="composer-row">
+            <button
+              type="button"
+              className={composer.soundEnabled ? "toggle-button active" : "toggle-button"}
+              onClick={() => setComposer((current) => ({ ...current, soundEnabled: !current.soundEnabled }))}
+            >
+              {composer.soundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
+              {composer.soundEnabled ? "Sonido" : "Silencio"}
+            </button>
           </div>
 
-          <label className="field">
-            <span>Notas</span>
-            <textarea
-              value={composer.notes}
-              onChange={(event) => setComposer((current) => ({ ...current, notes: event.target.value }))}
-              placeholder="Opcional"
-              rows={3}
-            />
-          </label>
+          <textarea
+            value={composer.notes}
+            onChange={(event) => setComposer((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Notas"
+            rows={2}
+          />
 
           {error ? <div className="error-banner">{error}</div> : null}
 
-          <div className="composer-footer">
-            <label className="setting-inline">
-              <input
-                type="checkbox"
-                checked={state.settings.launchAtLogin}
-                onChange={(event) => window.alarmApi.setLaunchAtLogin(event.target.checked)}
-              />
-              <span>Iniciar con la sesión</span>
-            </label>
+          {editingId ? (
+            <button type="button" className="secondary-button full-width" onClick={resetComposer}>
+              Cancelar
+            </button>
+          ) : null}
 
-            {editingId ? (
-              <button type="button" className="ghost-button" onClick={resetComposer}>
-                Cancelar
-              </button>
-            ) : null}
-          </div>
+          <button type="submit" className="primary-button primary-submit">
+            <Plus size={13} />
+            {editingId ? "Guardar" : "Añadir"}
+          </button>
         </form>
 
-        <div className="stack-column">
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <span className="panel-kicker">Programadas</span>
-                <h2>Alarmas activas</h2>
-              </div>
+        <section className="lists">
+          <div className="list-block">
+            <div className="list-head">
+              <h2>Alarmas activas</h2>
+              <span>{scheduled.length}</span>
             </div>
 
-            <div className="alarm-list">
+            <div className="list-body">
               {scheduled.length === 0 ? (
-                <div className="empty-state">
-                  <AlarmClockCheck size={22} />
-                  <p>No hay alarmas activas.</p>
-                </div>
+                <div className="empty-state">Sin alarmas activas.</div>
               ) : (
                 scheduled.map((alarm) => (
-                  <article className="alarm-card" key={alarm.id}>
-                    <div className="alarm-card-copy">
-                      <strong>{alarm.title || "Alarma sin título"}</strong>
+                  <article className="alarm-row" key={alarm.id}>
+                    <div className="alarm-copy">
+                      <strong title={alarm.notes || undefined}>{alarm.title || "Sin título"}</strong>
                       <span>{formatTargetDate(alarm.targetAt)}</span>
-                      <p>{alarm.notes || (now > 0 ? formatRemaining(alarm.targetAt, now) : "Calculando...")}</p>
+                      <small>{now ? formatRemaining(alarm.targetAt, now) : ""}</small>
                     </div>
 
-                    <div className="alarm-card-meta">
-                      <span className={alarm.soundEnabled ? "pill active" : "pill"}>
-                        {alarm.soundEnabled ? "Con sonido" : "Silenciosa"}
+                    <div className="alarm-actions">
+                      <span className={alarm.soundEnabled ? "sound-pill active" : "sound-pill"}>
+                        {alarm.soundEnabled ? "Sonido" : "Muda"}
                       </span>
-                      <div className="alarm-card-actions">
-                        <button type="button" className="ghost-button" onClick={() => startEditing(alarm)}>
-                          Editar
-                        </button>
-                        <button type="button" className="icon-button" onClick={() => deleteAlarm(alarm.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <span className="panel-kicker">Avisos</span>
-                <h2>Sonando</h2>
-              </div>
-            </div>
-
-            <div className="alarm-list compact">
-              {ringingAlarms.length === 0 ? (
-                <div className="empty-state muted">
-                  <Power size={18} />
-                  <p>Sin alarmas sonando.</p>
-                </div>
-              ) : (
-                ringingAlarms.map((alarm) => (
-                  <article className="alarm-card ringing" key={alarm.id}>
-                    <div className="alarm-card-copy">
-                      <strong>{alarm.title || "Alarma sin título"}</strong>
-                      <span>Programada para {formatTargetDate(alarm.targetAt)}</span>
-                      <p>{alarm.notes || "La alarma sigue activa hasta descartarla."}</p>
-                    </div>
-
-                    <div className="alarm-card-actions">
-                      <button type="button" className="primary-button soft" onClick={() => dismissAlarm(alarm.id)}>
-                        Descartar
+                      <button type="button" className="secondary-button" onClick={() => startEditing(alarm)}>
+                        Editar
+                      </button>
+                      <button type="button" className="icon-button" onClick={() => deleteAlarm(alarm.id)}>
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </article>
                 ))
               )}
             </div>
-          </section>
+          </div>
 
-          <section className="panel panel-history">
-            <div className="panel-header">
-              <div>
-                <span className="panel-kicker">Historial</span>
-                <h2>Últimas descartadas</h2>
-              </div>
+          <div className="list-block">
+            <div className="list-head">
+              <h2>Sonando</h2>
+              <span>{ringingAlarms.length}</span>
             </div>
 
-            <div className="history-list">
-              {dismissed.slice(0, 6).map((alarm) => (
-                <div className="history-row" key={alarm.id}>
-                  <span>{alarm.title || "Alarma sin título"}</span>
-                  <small>{formatTargetDate(alarm.targetAt)}</small>
-                </div>
-              ))}
-              {dismissed.length === 0 ? <div className="empty-inline">Todavía no hay historial.</div> : null}
+            <div className="list-body small">
+              {ringingAlarms.length === 0 ? (
+                <div className="empty-state">Nada activo.</div>
+              ) : (
+                ringingAlarms.map((alarm) => (
+                  <article className="alarm-row alert" key={alarm.id}>
+                    <div className="alarm-copy">
+                      <strong>{alarm.title || "Sin título"}</strong>
+                      <span>{formatTargetDate(alarm.targetAt)}</span>
+                    </div>
+
+                    <button type="button" className="primary-button" onClick={() => dismissAlarm(alarm.id)}>
+                      Descartar
+                    </button>
+                  </article>
+                ))
+              )}
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </section>
-
-      <footer className="status-bar">
-        <span>{ringing ? "Hay alarmas activas en este momento." : "La app sigue viva al cerrar la ventana."}</span>
-        <span>{now ? format(new Date(now), "EEEE d 'de' MMMM, HH:mm", { locale: es }) : ""}</span>
-      </footer>
     </main>
   );
 }
