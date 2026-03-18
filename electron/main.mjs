@@ -399,6 +399,9 @@ function validateAlarmInput(payload, requireId = false) {
 
   const repeat = createStoredRepeat(payload?.repeat, targetAt);
 
+  if (repeat.kind === "interval" && !Number.isFinite(repeat.intervalMs)) {
+    throw new Error("La repetición del temporizador no es válida.");
+  }
   if (repeat.kind === "weekly" && repeat.weekDays.length === 0) {
     throw new Error("Selecciona al menos un día para la repetición semanal.");
   }

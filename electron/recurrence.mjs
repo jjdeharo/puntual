@@ -1,10 +1,15 @@
-const VALID_REPEAT_KINDS = new Set(["none", "daily", "workdays", "weekly", "monthly", "yearly"]);
+const VALID_REPEAT_KINDS = new Set(["none", "interval", "daily", "workdays", "weekly", "monthly", "yearly"]);
 const VALID_END_TYPES = new Set(["never", "onDate", "afterCount"]);
 const VALID_MONTHLY_MODES = new Set(["dayOfMonth", "weekdayOfMonth"]);
 const VALID_MONTHLY_WEEKS = new Set([1, 2, 3, 4, -1]);
 
 function normalizeRepeatKind(value) {
   return VALID_REPEAT_KINDS.has(value) ? value : "none";
+}
+
+function normalizeIntervalMs(value) {
+  const interval = Number(value);
+  return Number.isFinite(interval) && interval > 0 ? interval : null;
 }
 
 function normalizeEndType(value) {
@@ -108,6 +113,9 @@ function getImmediateNextTargetAt(currentTargetAt, repeat) {
   const anchor = new Date(repeat.anchorAt);
 
   switch (repeat.kind) {
+    case "interval": {
+      return repeat.intervalMs ? currentTargetAt + repeat.intervalMs : null;
+    }
     case "daily": {
       const candidate = new Date(current);
       candidate.setDate(candidate.getDate() + 1);
@@ -155,6 +163,7 @@ export function createStoredRepeat(value, anchorAt) {
 
   return {
     kind,
+    intervalMs: kind === "interval" ? normalizeIntervalMs(value?.intervalMs) : null,
     weekDays: kind === "weekly" ? normalizeWeekDays(value?.weekDays) : [],
     monthlyMode: kind === "monthly" ? normalizeMonthlyMode(value?.monthlyMode) : "dayOfMonth",
     monthlyWeek: kind === "monthly" ? normalizeMonthlyWeek(value?.monthlyWeek) : 1,

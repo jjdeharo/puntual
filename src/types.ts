@@ -1,12 +1,13 @@
 export type AlarmStatus = "scheduled" | "ringing" | "dismissed";
 export type AppLocale = "system" | "es" | "ca" | "en" | "ga" | "eu";
-export type AlarmRepeatKind = "none" | "daily" | "workdays" | "weekly" | "monthly" | "yearly";
+export type AlarmRepeatKind = "none" | "interval" | "daily" | "workdays" | "weekly" | "monthly" | "yearly";
 export type AlarmRepeatEndType = "never" | "onDate" | "afterCount";
 export type AlarmMonthlyMode = "dayOfMonth" | "weekdayOfMonth";
 export type AlarmMonthlyWeek = 1 | 2 | 3 | 4 | -1;
 
 export type AlarmRepeat = {
   kind: AlarmRepeatKind;
+  intervalMs: number | null;
   weekDays: number[];
   monthlyMode: AlarmMonthlyMode;
   monthlyWeek: AlarmMonthlyWeek;
@@ -20,6 +21,7 @@ export type AlarmRepeat = {
 
 export type AlarmRepeatInput = {
   kind: AlarmRepeatKind;
+  intervalMs: number | null;
   weekDays: number[];
   monthlyMode: AlarmMonthlyMode;
   monthlyWeek: AlarmMonthlyWeek;

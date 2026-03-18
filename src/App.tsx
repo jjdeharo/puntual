@@ -107,6 +107,7 @@ const MESSAGES = {
     defaultSound: "Sonido por defecto",
     silent: "Silencio",
     repeat: "Repetir",
+    repeatTimer: "Repetir temporizador",
     noRepeat: "No repetir",
     repeatDaily: "Cada día",
     repeatWorkdays: "Días laborables",
@@ -194,6 +195,7 @@ const MESSAGES = {
     defaultSound: "So per defecte",
     silent: "Silenci",
     repeat: "Repeteix",
+    repeatTimer: "Repeteix temporitzador",
     noRepeat: "No es repeteix",
     repeatDaily: "Cada dia",
     repeatWorkdays: "Dies feiners",
@@ -281,6 +283,7 @@ const MESSAGES = {
     defaultSound: "Son predeterminado",
     silent: "Silencio",
     repeat: "Repetir",
+    repeatTimer: "Repetir temporizador",
     noRepeat: "Non repetir",
     repeatDaily: "Cada día",
     repeatWorkdays: "Días laborables",
@@ -368,6 +371,7 @@ const MESSAGES = {
     defaultSound: "Lehenetsitako soinua",
     silent: "Isilik",
     repeat: "Errepikatu",
+    repeatTimer: "Errepikatu tenporizadorea",
     noRepeat: "Ez errepikatu",
     repeatDaily: "Egunero",
     repeatWorkdays: "Lanegunetan",
@@ -455,6 +459,7 @@ const MESSAGES = {
     defaultSound: "Default sound",
     silent: "Silent",
     repeat: "Repeat",
+    repeatTimer: "Repeat timer",
     noRepeat: "Does not repeat",
     repeatDaily: "Every day",
     repeatWorkdays: "Weekdays",
@@ -537,6 +542,14 @@ function parseAbsoluteTarget(dateValue: string, timeValue: string) {
   return new Date(`${dateValue}T${timeValue}`).getTime();
 }
 
+function splitDuration(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  return {
+    minutes: String(Math.floor(safeSeconds / 60)),
+    seconds: String(safeSeconds % 60),
+  };
+}
+
 function toEndOfDayTimestamp(dateValue: string) {
   if (!dateValue) {
     return null;
@@ -608,6 +621,7 @@ function createDefaultComposer(lastSoundSource: string | null = null) {
     repeatMonthlyWeekDay: monthlyPattern.monthlyWeekDay,
     repeatEndType: "never" as AlarmRepeatEndType,
     repeatEndDate: "",
+    repeatEndTime: "",
     repeatCount: "10",
   };
 }
@@ -719,11 +733,14 @@ type ComposerState = {
   repeatMonthlyWeekDay: number;
   repeatEndType: AlarmRepeatEndType;
   repeatEndDate: string;
+  repeatEndTime: string;
   repeatCount: string;
 };
 
 function formatRepeatLabel(kind: AlarmRepeatKind, messages: MessageCatalog) {
   switch (kind) {
+    case "interval":
+      return messages.repeatTimer;
     case "daily":
       return messages.repeatDaily;
     case "workdays":
@@ -762,14 +779,20 @@ function formatRepeatSummary(repeat: AlarmRepeat, locale: Exclude<AppLocale, "sy
   }
 
   const base =
-    repeat.kind === "weekly" && repeat.weekDays.length > 0
+    repeat.kind === "interval" && repeat.intervalMs
+      ? `${messages.countdown}: ${formatDistanceStrict(repeat.intervalMs, 0, {
+          locale: DATE_FNS_LOCALES[locale],
+        })}`
+      : repeat.kind === "weekly" && repeat.weekDays.length > 0
       ? `${messages.repeatWeekly}: ${formatWeekDayList(repeat.weekDays, locale)}`
       : repeat.kind === "monthly"
         ? formatMonthlySummary(repeat, locale, messages)
       : formatRepeatLabel(repeat.kind, messages);
 
   if (repeat.endType === "onDate" && repeat.endAt) {
-    return `${base} ${messages.until} ${format(new Date(repeat.endAt), "d MMM yyyy", { locale: DATE_FNS_LOCALES[locale] })}`;
+    return `${base} ${messages.until} ${format(new Date(repeat.endAt), repeat.kind === "interval" ? "d MMM yyyy, HH:mm" : "d MMM yyyy", {
+      locale: DATE_FNS_LOCALES[locale],
+    })}`;
   }
   if (repeat.endType === "afterCount" && repeat.maxOccurrences) {
     return `${base}, ${repeat.maxOccurrences} ${messages.occurrences.toLowerCase()}`;
@@ -785,6 +808,7 @@ function buildRepeatInput(
   if (composer.repeatKind === "none") {
     return {
       kind: "none",
+      intervalMs: null,
       weekDays: [],
       monthlyMode: "dayOfMonth",
       monthlyWeek: 1,
@@ -816,6 +840,7 @@ function buildRepeatInput(
     }
     return {
       kind: composer.repeatKind,
+      intervalMs: null,
       weekDays,
       monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
       monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
@@ -833,6 +858,7 @@ function buildRepeatInput(
     }
     return {
       kind: composer.repeatKind,
+      intervalMs: null,
       weekDays,
       monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
       monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
@@ -845,6 +871,7 @@ function buildRepeatInput(
 
   return {
     kind: composer.repeatKind,
+    intervalMs: null,
     weekDays,
     monthlyMode: composer.repeatKind === "monthly" ? composer.repeatMonthlyMode : "dayOfMonth",
     monthlyWeek: composer.repeatKind === "monthly" ? composer.repeatMonthlyWeek : 1,
@@ -852,6 +879,57 @@ function buildRepeatInput(
     endType: "never",
     endAt: null,
     maxOccurrences: null,
+  };
+}
+
+function buildCountdownRepeatInput(composer: ComposerState, targetAt: number, intervalMs: number): AlarmRepeatInput | null {
+  if (composer.repeatKind !== "interval") {
+    return {
+      kind: "none",
+      intervalMs: null,
+      weekDays: [],
+      monthlyMode: "dayOfMonth",
+      monthlyWeek: 1,
+      monthlyWeekDay: null,
+      endType: "never",
+      endAt: null,
+      maxOccurrences: null,
+    };
+  }
+
+  if (composer.repeatEndType === "onDate") {
+    const endAt = parseAbsoluteTarget(composer.repeatEndDate, composer.repeatEndTime);
+    if (!Number.isFinite(endAt) || endAt < targetAt) {
+      return null;
+    }
+    return {
+      kind: "interval",
+      intervalMs,
+      weekDays: [],
+      monthlyMode: "dayOfMonth",
+      monthlyWeek: 1,
+      monthlyWeekDay: null,
+      endType: "onDate",
+      endAt,
+      maxOccurrences: null,
+    };
+  }
+
+  const maxOccurrences = Number.parseInt(composer.repeatCount, 10);
+  if (!Number.isInteger(maxOccurrences) || maxOccurrences < 1) {
+    return null;
+  }
+
+  return {
+    kind: "interval",
+    intervalMs,
+    weekDays: [],
+    monthlyMode: "dayOfMonth",
+    monthlyWeek: 1,
+    monthlyWeekDay: null,
+    endType: "afterCount",
+    endAt: null,
+    maxOccurrences,
   };
 }
 
@@ -1015,13 +1093,17 @@ function App() {
     setEditingId(alarm.id);
     setError("");
     const monthlyPattern = getMonthlyPatternFromTimestamp(alarm.targetAt);
+    const countdownParts =
+      alarm.repeat.kind === "interval" && alarm.repeat.intervalMs
+        ? splitDuration(alarm.repeat.intervalMs / 1000)
+        : { minutes: "5", seconds: "0" };
     setComposer({
       title: alarm.title,
       notes: alarm.notes,
       targetDate: toInputDate(new Date(alarm.targetAt)),
       targetTime: toInputTime(new Date(alarm.targetAt)),
-      countdownMinutes: "5",
-      countdownSeconds: "0",
+      countdownMinutes: countdownParts.minutes,
+      countdownSeconds: countdownParts.seconds,
       soundEnabled: alarm.soundEnabled,
       soundSource: alarm.soundSource,
       repeatKind: alarm.repeat.kind,
@@ -1034,9 +1116,10 @@ function App() {
           : monthlyPattern.monthlyWeekDay,
       repeatEndType: alarm.repeat.kind === "none" ? "never" : alarm.repeat.endType,
       repeatEndDate: alarm.repeat.endAt ? toInputDate(new Date(alarm.repeat.endAt)) : "",
+      repeatEndTime: alarm.repeat.endAt ? toInputTime(new Date(alarm.repeat.endAt)) : "",
       repeatCount: String(alarm.repeat.maxOccurrences ?? 10),
     });
-    setScheduleMode("absolute");
+    setScheduleMode(alarm.repeat.kind === "interval" ? "countdown" : "absolute");
   }
 
   async function submitAlarm(event: React.FormEvent) {
@@ -1054,16 +1137,13 @@ function App() {
 
     let repeat: AlarmRepeatInput;
     if (scheduleMode === "countdown") {
-      repeat = {
-        kind: "none",
-        weekDays: [],
-        monthlyMode: "dayOfMonth",
-        monthlyWeek: 1,
-        monthlyWeekDay: null,
-        endType: "never",
-        endAt: null,
-        maxOccurrences: null,
-      };
+      const intervalMs = countdownDurationMs ?? NaN;
+      const nextRepeat = buildCountdownRepeatInput(composer, targetAt, intervalMs);
+      if (!nextRepeat) {
+        setError(composer.repeatEndType === "onDate" ? messages.invalidEndDate : messages.invalidRepeatCount);
+        return;
+      }
+      repeat = nextRepeat;
     } else {
       const nextRepeat = buildRepeatInput(composer, targetAt);
       if (!nextRepeat) {
@@ -1226,7 +1306,20 @@ function App() {
             <button
               type="button"
               className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
-              onClick={() => setScheduleMode("absolute")}
+              onClick={() => {
+                setScheduleMode("absolute");
+                setComposer((current) =>
+                  current.repeatKind === "interval"
+                    ? {
+                        ...current,
+                        repeatKind: "none",
+                        repeatEndType: "never",
+                        repeatEndDate: "",
+                        repeatEndTime: "",
+                      }
+                    : current
+                );
+              }}
             >
               <CalendarClock size={13} />
               {messages.alarm}
@@ -1238,10 +1331,14 @@ function App() {
                 setScheduleMode("countdown");
                 setComposer((current) => ({
                   ...current,
-                  repeatKind: "none",
+                  repeatKind: current.repeatKind === "interval" ? "interval" : "none",
                   repeatWeekDays: [],
-                  repeatEndType: "never",
-                  repeatEndDate: "",
+                  repeatMonthlyMode: "dayOfMonth",
+                  repeatMonthlyWeek: 1,
+                  repeatMonthlyWeekDay: 1,
+                  repeatEndType: current.repeatKind === "interval" && current.repeatEndType !== "never" ? current.repeatEndType : "afterCount",
+                  repeatEndDate: current.repeatKind === "interval" ? current.repeatEndDate : "",
+                  repeatEndTime: current.repeatKind === "interval" ? current.repeatEndTime : "",
                 }));
               }}
             >
@@ -1251,27 +1348,124 @@ function App() {
           </div>
 
           {scheduleMode === "countdown" ? (
-            <div className="countdown-row">
-              <input
-                type="number"
-                min="0"
-                value={composer.countdownMinutes}
-                onChange={(event) =>
-                  setComposer((current) => ({ ...current, countdownMinutes: event.target.value }))
-                }
-                placeholder={messages.minutesShort}
-              />
-              <input
-                type="number"
-                min="0"
-                max="59"
-                value={composer.countdownSeconds}
-                onChange={(event) =>
-                  setComposer((current) => ({ ...current, countdownSeconds: event.target.value }))
-                }
-                placeholder={messages.secondsShort}
-              />
-            </div>
+            <>
+              <div className="countdown-row">
+                <input
+                  type="number"
+                  min="0"
+                  value={composer.countdownMinutes}
+                  onChange={(event) =>
+                    setComposer((current) => ({ ...current, countdownMinutes: event.target.value }))
+                  }
+                  placeholder={messages.minutesShort}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={composer.countdownSeconds}
+                  onChange={(event) =>
+                    setComposer((current) => ({ ...current, countdownSeconds: event.target.value }))
+                  }
+                  placeholder={messages.secondsShort}
+                />
+              </div>
+
+              <label className="checkbox-inline prominent">
+                <input
+                  type="checkbox"
+                  checked={composer.repeatKind === "interval"}
+                  onChange={(event) =>
+                    setComposer((current) => ({
+                      ...current,
+                      repeatKind: event.target.checked ? "interval" : "none",
+                      repeatEndType: event.target.checked ? (current.repeatEndType === "never" ? "afterCount" : current.repeatEndType) : "never",
+                      repeatEndDate: event.target.checked ? current.repeatEndDate : "",
+                      repeatEndTime: event.target.checked ? current.repeatEndTime : "",
+                    }))
+                  }
+                />
+                <span>{messages.repeatTimer}</span>
+              </label>
+
+              {composer.repeatKind === "interval" ? (
+                <>
+                  <label className="field-block">
+                    <span>{messages.ends}</span>
+                    <select
+                      className="settings-select"
+                      value={composer.repeatEndType === "onDate" ? "onDate" : "afterCount"}
+                      onChange={(event) =>
+                        setComposer((current) => ({
+                          ...current,
+                          repeatEndType: event.target.value as AlarmRepeatEndType,
+                        }))
+                      }
+                    >
+                      <option value="afterCount">{messages.endsAfter}</option>
+                      <option value="onDate">{messages.dateTime}</option>
+                    </select>
+                  </label>
+
+                  {composer.repeatEndType === "onDate" ? (
+                    <div className="field-grid">
+                      <label className="field-block">
+                        <span>{messages.date}</span>
+                        <input
+                          type="date"
+                          value={composer.repeatEndDate}
+                          onChange={(event) => setComposer((current) => ({ ...current, repeatEndDate: event.target.value }))}
+                        />
+                      </label>
+                      <label className="field-block">
+                        <span>{messages.time}</span>
+                        <input
+                          type="time"
+                          value={composer.repeatEndTime}
+                          onChange={(event) => setComposer((current) => ({ ...current, repeatEndTime: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {composer.repeatEndType === "afterCount" ? (
+                    <label className="field-block">
+                      <span>{messages.occurrences}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={composer.repeatCount}
+                        onChange={(event) => setComposer((current) => ({ ...current, repeatCount: event.target.value }))}
+                      />
+                    </label>
+                  ) : null}
+
+                  <div className="repeat-summary">
+                    {formatRepeatSummary(
+                      {
+                        kind: "interval",
+                        intervalMs: countdownDurationMs,
+                        weekDays: [],
+                        monthlyMode: "dayOfMonth",
+                        monthlyWeek: 1,
+                        monthlyWeekDay: null,
+                        endType: composer.repeatEndType === "onDate" ? "onDate" : "afterCount",
+                        endAt:
+                          composer.repeatEndType === "onDate"
+                            ? parseAbsoluteTarget(composer.repeatEndDate, composer.repeatEndTime)
+                            : null,
+                        maxOccurrences:
+                          composer.repeatEndType === "afterCount" ? Number.parseInt(composer.repeatCount, 10) || null : null,
+                        occurrenceCount: 1,
+                        anchorAt: previewTargetAt ?? now,
+                      },
+                      appLocale,
+                      messages
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </>
           ) : (
             <>
               <div className="field-grid">
@@ -1503,6 +1697,7 @@ function App() {
                     {formatRepeatSummary(
                       {
                         kind: composer.repeatKind,
+                        intervalMs: null,
                         weekDays: composer.repeatWeekDays,
                         monthlyMode: composer.repeatMonthlyMode,
                         monthlyWeek: composer.repeatMonthlyWeek,
