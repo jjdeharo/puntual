@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
-import { ca, enUS, es } from "date-fns/locale";
-import { Bell, BellOff, Clock3, ExternalLink, Info, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { ca, enUS, es, eu, gl } from "date-fns/locale";
+import { Bell, BellOff, CalendarClock, Clock3, ExternalLink, FolderOpen, Info, Plus, RefreshCw, Settings, Trash2, X } from "lucide-react";
 import "./App.css";
 import type {
   Alarm,
@@ -15,8 +15,7 @@ import type {
   AppLocale,
 } from "./types";
 
-const ALARM_SOUND_PATH =
-  "file:///home/jjdeharo/Documentos/github/escritorio-digital.github.io/dist/sounds/alarm-clock-elapsed.oga";
+const ALARM_SOUND_PATH = new URL("./assets/alarm-clock-elapsed.oga", import.meta.url).href;
 
 const fallbackState: AlarmState = {
   alarms: [],
@@ -24,6 +23,7 @@ const fallbackState: AlarmState = {
     launchAtLogin: true,
     silenceWhileWindowOpen: false,
     locale: "system",
+    lastSoundSource: null,
   },
 };
 
@@ -45,31 +45,39 @@ const DATE_FNS_LOCALES = {
   es,
   ca,
   en: enUS,
+  ga: gl,
+  eu,
 } as const;
 
-const LOCALE_LABELS: Record<AppLocale, { es: string; ca: string; en: string }> = {
-  system: { es: "Automático", ca: "Automàtic", en: "Automatic" },
-  es: { es: "Español", ca: "Espanyol", en: "Spanish" },
-  ca: { es: "Catalán", ca: "Català", en: "Catalan" },
-  en: { es: "Inglés", ca: "Anglès", en: "English" },
+const LOCALE_LABELS: Record<AppLocale, Record<Exclude<AppLocale, "system">, string>> = {
+  system: { es: "Automático", ca: "Automàtic", en: "Automatic", ga: "Automático", eu: "Automatikoa" },
+  es: { es: "Español", ca: "Espanyol", en: "Spanish", ga: "Gaztelania", eu: "Gaztelania" },
+  ca: { es: "Catalán", ca: "Català", en: "Catalan", ga: "Catalán", eu: "Katalana" },
+  en: { es: "Inglés", ca: "Anglès", en: "English", ga: "Inglés", eu: "Ingelesa" },
+  ga: { es: "Gallego", ca: "Gallec", en: "Galician", ga: "Galego", eu: "Galiziera" },
+  eu: { es: "Euskera", ca: "Euskera", en: "Basque", ga: "Éuscaro", eu: "Euskara" },
 };
 
-const WEEKDAY_OPTIONS = [
-  { value: 1, short: { es: "L", ca: "Dl", en: "Mo" }, long: { es: "lunes", ca: "dilluns", en: "Monday" } },
-  { value: 2, short: { es: "M", ca: "Dt", en: "Tu" }, long: { es: "martes", ca: "dimarts", en: "Tuesday" } },
-  { value: 3, short: { es: "X", ca: "Dc", en: "We" }, long: { es: "miércoles", ca: "dimecres", en: "Wednesday" } },
-  { value: 4, short: { es: "J", ca: "Dj", en: "Th" }, long: { es: "jueves", ca: "dijous", en: "Thursday" } },
-  { value: 5, short: { es: "V", ca: "Dv", en: "Fr" }, long: { es: "viernes", ca: "divendres", en: "Friday" } },
-  { value: 6, short: { es: "S", ca: "Ds", en: "Sa" }, long: { es: "sábado", ca: "dissabte", en: "Saturday" } },
-  { value: 7, short: { es: "D", ca: "Dg", en: "Su" }, long: { es: "domingo", ca: "diumenge", en: "Sunday" } },
+const WEEKDAY_OPTIONS: ReadonlyArray<{
+  value: number;
+  short: Record<Exclude<AppLocale, "system">, string>;
+  long: Record<Exclude<AppLocale, "system">, string>;
+}> = [
+  { value: 1, short: { es: "L", ca: "Dl", en: "Mo", ga: "L", eu: "Al" }, long: { es: "lunes", ca: "dilluns", en: "Monday", ga: "luns", eu: "astelehena" } },
+  { value: 2, short: { es: "M", ca: "Dt", en: "Tu", ga: "M", eu: "Ar" }, long: { es: "martes", ca: "dimarts", en: "Tuesday", ga: "martes", eu: "asteartea" } },
+  { value: 3, short: { es: "X", ca: "Dc", en: "We", ga: "X", eu: "Az" }, long: { es: "miércoles", ca: "dimecres", en: "Wednesday", ga: "mércores", eu: "asteazkena" } },
+  { value: 4, short: { es: "J", ca: "Dj", en: "Th", ga: "X", eu: "Og" }, long: { es: "jueves", ca: "dijous", en: "Thursday", ga: "xoves", eu: "osteguna" } },
+  { value: 5, short: { es: "V", ca: "Dv", en: "Fr", ga: "V", eu: "Or" }, long: { es: "viernes", ca: "divendres", en: "Friday", ga: "venres", eu: "ostirala" } },
+  { value: 6, short: { es: "S", ca: "Ds", en: "Sa", ga: "S", eu: "Lr" }, long: { es: "sábado", ca: "dissabte", en: "Saturday", ga: "sábado", eu: "larunbata" } },
+  { value: 7, short: { es: "D", ca: "Dg", en: "Su", ga: "D", eu: "Ig" }, long: { es: "domingo", ca: "diumenge", en: "Sunday", ga: "domingo", eu: "igandea" } },
 ] as const;
 
 const MONTHLY_WEEK_OPTIONS: Array<{ value: AlarmMonthlyWeek; labels: Record<Exclude<AppLocale, "system">, string> }> = [
-  { value: 1, labels: { es: "primer", ca: "primer", en: "first" } },
-  { value: 2, labels: { es: "segundo", ca: "segon", en: "second" } },
-  { value: 3, labels: { es: "tercer", ca: "tercer", en: "third" } },
-  { value: 4, labels: { es: "cuarto", ca: "quart", en: "fourth" } },
-  { value: -1, labels: { es: "último", ca: "últim", en: "last" } },
+  { value: 1, labels: { es: "primer", ca: "primer", en: "first", ga: "primeiro", eu: "lehen" } },
+  { value: 2, labels: { es: "segundo", ca: "segon", en: "second", ga: "segundo", eu: "bigarren" } },
+  { value: 3, labels: { es: "tercer", ca: "tercer", en: "third", ga: "terceiro", eu: "hirugarren" } },
+  { value: 4, labels: { es: "cuarto", ca: "quart", en: "fourth", ga: "cuarto", eu: "laugarren" } },
+  { value: -1, labels: { es: "último", ca: "últim", en: "last", ga: "último", eu: "azken" } },
 ];
 
 const MESSAGES = {
@@ -85,13 +93,18 @@ const MESSAGES = {
     editAlarm: "Editar alarma",
     newAlarm: "Nueva alarma",
     title: "Título",
-    countdown: "Cuenta atrás",
+    alarm: "Alarma",
+    countdown: "Temporizador",
     dateTime: "Fecha y hora",
     date: "Fecha",
     time: "Hora",
     minutesShort: "Min",
     secondsShort: "Seg",
     sound: "Sonido",
+    customSound: "Sonido personalizado",
+    chooseSound: "Elegir archivo",
+    clearSound: "Quitar sonido",
+    defaultSound: "Sonido por defecto",
     silent: "Silencio",
     repeat: "Repetir",
     noRepeat: "No repetir",
@@ -167,13 +180,18 @@ const MESSAGES = {
     editAlarm: "Edita alarma",
     newAlarm: "Nova alarma",
     title: "Títol",
-    countdown: "Compte enrere",
+    alarm: "Alarma",
+    countdown: "Temporitzador",
     dateTime: "Data i hora",
     date: "Data",
     time: "Hora",
     minutesShort: "Min",
     secondsShort: "Seg",
     sound: "So",
+    customSound: "So personalitzat",
+    chooseSound: "Tria fitxer",
+    clearSound: "Treu so",
+    defaultSound: "So per defecte",
     silent: "Silenci",
     repeat: "Repeteix",
     noRepeat: "No es repeteix",
@@ -237,6 +255,180 @@ const MESSAGES = {
     invalidRepeatCount: "Nombre de repeticions invàlid.",
     saveFailed: "No s'ha pogut desar.",
   },
+  ga: {
+    now: "Agora",
+    today: "Hoxe",
+    tomorrow: "Mañá",
+    preview: "Vista previa: {value}",
+    noNextAlarm: "Sen próxima alarma",
+    ringing: "Soando",
+    waiting: "En espera",
+    noAlarms: "Sen alarmas",
+    editAlarm: "Editar alarma",
+    newAlarm: "Nova alarma",
+    title: "Título",
+    alarm: "Alarma",
+    countdown: "Temporizador",
+    dateTime: "Data e hora",
+    date: "Data",
+    time: "Hora",
+    minutesShort: "Min",
+    secondsShort: "Seg",
+    sound: "Son",
+    customSound: "Son personalizado",
+    chooseSound: "Escoller ficheiro",
+    clearSound: "Quitar son",
+    defaultSound: "Son predeterminado",
+    silent: "Silencio",
+    repeat: "Repetir",
+    noRepeat: "Non repetir",
+    repeatDaily: "Cada día",
+    repeatWorkdays: "Días laborables",
+    repeatWeekly: "Semanalmente",
+    repeatMonthly: "Mensualmente",
+    repeatYearly: "Anualmente",
+    repeatDays: "Días",
+    monthlyPattern: "Patrón mensual",
+    monthlyByDayOfMonth: "Mesmo día do mes",
+    monthlyByWeekdayOfMonth: "Día da semana",
+    monthlyWeek: "Semana",
+    monthlyWeekDay: "Día da semana",
+    ends: "Finaliza",
+    never: "Nunca",
+    endsOnDate: "En data",
+    endsAfter: "Tras repeticións",
+    occurrences: "Veces",
+    noEndDate: "sen data de fin",
+    until: "ata",
+    dayOfMonthPrefix: "día",
+    notes: "Notas",
+    cancel: "Cancelar",
+    save: "Gardar",
+    add: "Engadir",
+    activeAlarms: "Alarmas activas",
+    noActiveAlarms: "Sen alarmas activas.",
+    untitled: "Sen título",
+    muted: "Muda",
+    edit: "Editar",
+    ringingSection: "Soando",
+    nothingActive: "Nada activo.",
+    dismiss: "Descartar",
+    about: "Acerca de",
+    settings: "Configuración",
+    close: "Pechar",
+    aboutTitle: "Acerca de Puntual",
+    aboutText: "Alarma de escritorio con bandexa, persistencia real e un temporizador que sobrevive a peches e reinicios.",
+    version: "Versión",
+    license: "Licenza",
+    repository: "Repositorio",
+    openRepo: "Abrir repo",
+    downloads: "Descargas",
+    checkUpdates: "Buscar actualizacións",
+    checkingUpdates: "Consultando a última release publicada...",
+    checkUpdatesFailed: "Non se puido comprobar se hai actualizacións.",
+    invalidReleaseData: "GitHub non devolveu unha versión válida.",
+    upToDate: "Estás ao día. Última versión publicada: {version}.",
+    updateAvailable: "Hai unha versión máis recente: {version}.",
+    openRelease: "Abrir release",
+    settingsTitle: "Configuración",
+    appLanguage: "Idioma da app",
+    systemLanguage: "Idioma detectado do sistema: {language}.",
+    launchAtLogin: "Iniciar Puntual co sistema",
+    launchAtLoginHelp: "Abre a aplicación ao iniciar sesión e déixaa minimizada na bandexa.",
+    invalidCountdown: "Temporizador inválido.",
+    invalidDate: "Data inválida.",
+    invalidRepeatDays: "Selecciona polo menos un día.",
+    invalidEndDate: "Data de fin inválida.",
+    invalidRepeatCount: "Número de repeticións inválido.",
+    saveFailed: "Non se puido gardar.",
+  },
+  eu: {
+    now: "Orain",
+    today: "Gaur",
+    tomorrow: "Bihar",
+    preview: "Aurrebista: {value}",
+    noNextAlarm: "Hurrengo alarmarik ez",
+    ringing: "Jotzen",
+    waiting: "Zain",
+    noAlarms: "Alarmarik ez",
+    editAlarm: "Editatu alarma",
+    newAlarm: "Alarma berria",
+    title: "Izenburua",
+    alarm: "Alarma",
+    countdown: "Tenporizadorea",
+    dateTime: "Data eta ordua",
+    date: "Data",
+    time: "Ordua",
+    minutesShort: "Min",
+    secondsShort: "Seg",
+    sound: "Soinua",
+    customSound: "Soinu pertsonalizatua",
+    chooseSound: "Aukeratu fitxategia",
+    clearSound: "Kendu soinua",
+    defaultSound: "Lehenetsitako soinua",
+    silent: "Isilik",
+    repeat: "Errepikatu",
+    noRepeat: "Ez errepikatu",
+    repeatDaily: "Egunero",
+    repeatWorkdays: "Lanegunetan",
+    repeatWeekly: "Astero",
+    repeatMonthly: "Hilero",
+    repeatYearly: "Urtero",
+    repeatDays: "Egunak",
+    monthlyPattern: "Hileko eredua",
+    monthlyByDayOfMonth: "Hileko egun bera",
+    monthlyByWeekdayOfMonth: "Asteko eguna",
+    monthlyWeek: "Astea",
+    monthlyWeekDay: "Asteko eguna",
+    ends: "Amaitzen da",
+    never: "Inoiz ez",
+    endsOnDate: "Data jakin batean",
+    endsAfter: "Errepikapen kopuruaren ondoren",
+    occurrences: "Aldiz",
+    noEndDate: "amaiera-datarik gabe",
+    until: "arte",
+    dayOfMonthPrefix: "eguna",
+    notes: "Oharrak",
+    cancel: "Utzi",
+    save: "Gorde",
+    add: "Gehitu",
+    activeAlarms: "Alarma aktiboak",
+    noActiveAlarms: "Ez dago alarma aktiborik.",
+    untitled: "Izenbururik gabe",
+    muted: "Mutua",
+    edit: "Editatu",
+    ringingSection: "Jotzen",
+    nothingActive: "Ez dago ezer aktibo.",
+    dismiss: "Baztertu",
+    about: "Honi buruz",
+    settings: "Ezarpenak",
+    close: "Itxi",
+    aboutTitle: "Puntuali buruz",
+    aboutText: "Mahaigaineko alarma, bandejarekin, benetako persistentziarekin eta itxieren zein berrabiarazteen gainetik irauten duen tenporizadorearekin.",
+    version: "Bertsioa",
+    license: "Lizentzia",
+    repository: "Biltegia",
+    openRepo: "Ireki repoa",
+    downloads: "Deskargak",
+    checkUpdates: "Bilatu eguneraketak",
+    checkingUpdates: "Argitaratutako azken release-a kontsultatzen...",
+    checkUpdatesFailed: "Ezin izan da eguneraketarik dagoen egiaztatu.",
+    invalidReleaseData: "GitHub-ek ez du baliozko bertsiorik itzuli.",
+    upToDate: "Eguneratuta zaude. Argitaratutako azken bertsioa: {version}.",
+    updateAvailable: "Bertsio berriago bat dago: {version}.",
+    openRelease: "Ireki release-a",
+    settingsTitle: "Ezarpenak",
+    appLanguage: "Aplikazioaren hizkuntza",
+    systemLanguage: "Sistemak hautemandako hizkuntza: {language}.",
+    launchAtLogin: "Abiatu Puntual sistemarekin",
+    launchAtLoginHelp: "Ireki aplikazioa saioa hastean eta utzi bandejan minimizatuta.",
+    invalidCountdown: "Tenporizadore baliogabea.",
+    invalidDate: "Data baliogabea.",
+    invalidRepeatDays: "Hautatu gutxienez egun bat.",
+    invalidEndDate: "Amaiera-data baliogabea.",
+    invalidRepeatCount: "Errepikapen kopuru baliogabea.",
+    saveFailed: "Ezin izan da gorde.",
+  },
   en: {
     now: "Now",
     today: "Today",
@@ -249,13 +441,18 @@ const MESSAGES = {
     editAlarm: "Edit alarm",
     newAlarm: "New alarm",
     title: "Title",
-    countdown: "Countdown",
+    alarm: "Alarm",
+    countdown: "Timer",
     dateTime: "Date and time",
     date: "Date",
     time: "Time",
     minutesShort: "Min",
     secondsShort: "Sec",
     sound: "Sound",
+    customSound: "Custom sound",
+    chooseSound: "Choose file",
+    clearSound: "Clear sound",
+    defaultSound: "Default sound",
     silent: "Silent",
     repeat: "Repeat",
     noRepeat: "Does not repeat",
@@ -379,7 +576,20 @@ function getMonthlyWeekLabel(week: AlarmMonthlyWeek, locale: Exclude<AppLocale, 
   return MONTHLY_WEEK_OPTIONS.find((option) => option.value === week)?.labels[locale] ?? "";
 }
 
-function createDefaultComposer() {
+function getSoundLabel(soundSource: string | null) {
+  if (!soundSource) {
+    return null;
+  }
+
+  const tail = soundSource.split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(tail);
+  } catch {
+    return tail;
+  }
+}
+
+function createDefaultComposer(lastSoundSource: string | null = null) {
   const now = new Date();
   const monthlyPattern = getMonthlyPatternFromTimestamp(now.getTime());
   return {
@@ -390,6 +600,7 @@ function createDefaultComposer() {
     countdownMinutes: "5",
     countdownSeconds: "0",
     soundEnabled: true,
+    soundSource: lastSoundSource,
     repeatKind: "none" as AlarmRepeatKind,
     repeatWeekDays: [] as number[],
     repeatMonthlyMode: "dayOfMonth" as AlarmMonthlyMode,
@@ -447,7 +658,7 @@ async function fetchLatestRelease() {
 
 function normalizeLocale(value: string | undefined | null): Exclude<AppLocale, "system"> {
   const base = String(value ?? "").toLowerCase().split("-")[0];
-  return base === "ca" || base === "en" ? base : "es";
+  return base === "ca" || base === "en" || base === "ga" || base === "eu" ? base : "es";
 }
 
 function translate(locale: Exclude<AppLocale, "system">, key: keyof (typeof MESSAGES)["es"], variables: Record<string, string | number> = {}) {
@@ -500,6 +711,7 @@ type ComposerState = {
   countdownMinutes: string;
   countdownSeconds: string;
   soundEnabled: boolean;
+  soundSource: string | null;
   repeatKind: AlarmRepeatKind;
   repeatWeekDays: number[];
   repeatMonthlyMode: AlarmMonthlyMode;
@@ -645,7 +857,7 @@ function buildRepeatInput(
 
 function App() {
   const [state, setState] = useState<AlarmState>(fallbackState);
-  const [composer, setComposer] = useState<ComposerState>(createDefaultComposer);
+  const [composer, setComposer] = useState<ComposerState>(() => createDefaultComposer());
   const [scheduleMode, setScheduleMode] = useState<"absolute" | "countdown">("absolute");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -655,6 +867,8 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioObjectUrlRef = useRef<string | null>(null);
+  const soundFileInputRef = useRef<HTMLInputElement | null>(null);
   const systemLocale = useMemo(() => normalizeLocale(typeof navigator === "undefined" ? "es" : navigator.language), []);
   const appLocale = state.settings.locale === "system" ? systemLocale : state.settings.locale;
   const messages = MESSAGES[appLocale];
@@ -669,6 +883,7 @@ function App() {
       }
       setState(nextState);
       setRinging(nextState.alarms.some((alarm) => alarm.status === "ringing" && alarm.soundEnabled));
+      setComposer((current) => ({ ...current, soundSource: nextState.settings.lastSoundSource }));
     });
 
     const unsubscribeState = window.alarmApi.onState((nextState) => {
@@ -683,22 +898,17 @@ function App() {
       unsubscribeState();
       unsubscribeRing();
       window.clearInterval(timer);
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      if (audioObjectUrlRef.current) {
+        URL.revokeObjectURL(audioObjectUrlRef.current);
+        audioObjectUrlRef.current = null;
+      }
     };
   }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current ?? new Audio(ALARM_SOUND_PATH);
-    audioRef.current = audio;
-    audio.loop = true;
-
-    if (!ringing) {
-      audio.pause();
-      audio.currentTime = 0;
-      return;
-    }
-
-    void audio.play().catch(() => undefined);
-  }, [ringing]);
 
   useEffect(() => {
     const lastCheckAt = Number.parseInt(window.localStorage.getItem(AUTO_UPDATE_CHECK_KEY) ?? "0", 10);
@@ -732,8 +942,51 @@ function App() {
     () => state.alarms.filter((alarm) => alarm.status === "ringing").sort((a, b) => a.targetAt - b.targetAt),
     [state.alarms]
   );
+  const activeSoundSource = ringingAlarms.find((alarm) => alarm.soundEnabled)?.soundSource ?? ALARM_SOUND_PATH;
 
-  const nextAlarm = scheduled[0] ?? null;
+  useEffect(() => {
+    let cancelled = false;
+
+    const play = async () => {
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.loop = true;
+
+      if (!ringing) {
+        audio.pause();
+        audio.currentTime = 0;
+        return;
+      }
+
+      let playableUrl = activeSoundSource;
+      if (activeSoundSource.startsWith("file://")) {
+        const { buffer, mimeType } = await window.alarmApi.readSoundFile(activeSoundSource);
+        if (cancelled) {
+          return;
+        }
+        if (audioObjectUrlRef.current) {
+          URL.revokeObjectURL(audioObjectUrlRef.current);
+        }
+        const blobBytes = Uint8Array.from(buffer) as unknown as BlobPart;
+        audioObjectUrlRef.current = URL.createObjectURL(new Blob([blobBytes], { type: mimeType }));
+        playableUrl = audioObjectUrlRef.current;
+      }
+
+      if (audio.src !== playableUrl) {
+        audio.src = playableUrl;
+        audio.load();
+      }
+
+      void audio.play().catch(() => undefined);
+    };
+
+    void play();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSoundSource, ringing]);
+
   const countdownDurationMs = useMemo(() => {
     const minutes = Number(composer.countdownMinutes || 0);
     const seconds = Number(composer.countdownSeconds || 0);
@@ -750,16 +1003,10 @@ function App() {
     const parsed = parseAbsoluteTarget(composer.targetDate, composer.targetTime);
     return Number.isFinite(parsed) && parsed > now ? parsed : null;
   }, [composer.targetDate, composer.targetTime, countdownDurationMs, now, scheduleMode]);
-  const headerTargetAt = nextAlarm?.targetAt ?? previewTargetAt;
-  const headerTargetLabel = nextAlarm
-    ? formatTargetDate(nextAlarm.targetAt, appLocale, messages)
-    : previewTargetAt
-      ? translate(appLocale, "preview", { value: formatTargetDate(previewTargetAt, appLocale, messages) })
-      : messages.noNextAlarm;
 
-  function resetComposer() {
-    setComposer(createDefaultComposer());
-    setScheduleMode("absolute");
+  function resetComposer(lastSoundSource = state.settings.lastSoundSource, nextMode = scheduleMode) {
+    setComposer(createDefaultComposer(lastSoundSource));
+    setScheduleMode(nextMode);
     setEditingId(null);
     setError("");
   }
@@ -776,6 +1023,7 @@ function App() {
       countdownMinutes: "5",
       countdownSeconds: "0",
       soundEnabled: alarm.soundEnabled,
+      soundSource: alarm.soundSource,
       repeatKind: alarm.repeat.kind,
       repeatWeekDays: [...alarm.repeat.weekDays],
       repeatMonthlyMode: alarm.repeat.monthlyMode,
@@ -836,16 +1084,35 @@ function App() {
       notes: composer.notes.trim(),
       targetAt,
       soundEnabled: composer.soundEnabled,
+      soundSource: composer.soundSource,
       repeat,
     };
 
     try {
-      if (editingId) {
-        await window.alarmApi.updateAlarm({ ...payload, id: editingId });
-      } else {
-        await window.alarmApi.createAlarm(payload);
-      }
-      resetComposer();
+      const nextState = editingId
+        ? await window.alarmApi.updateAlarm({ ...payload, id: editingId })
+        : await window.alarmApi.createAlarm(payload);
+      setState(nextState);
+      resetComposer(nextState.settings.lastSoundSource);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : messages.saveFailed);
+    }
+  }
+
+  async function importSelectedSound(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      const imported = await window.alarmApi.importSoundFile({
+        name: file.name,
+        buffer: await file.arrayBuffer(),
+      });
+      setComposer((current) => ({ ...current, soundSource: imported.url, soundEnabled: true }));
+      setError("");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : messages.saveFailed);
     }
@@ -920,14 +1187,6 @@ function App() {
           </div>
         </div>
 
-        <div className="topbar-center">
-          <div className="status-line">
-            <span className={`state-chip ${ringing ? "alert" : ""}`}>{ringing ? messages.ringing : messages.waiting}</span>
-            <strong>{headerTargetAt ? formatRemaining(headerTargetAt, now, appLocale, messages) : messages.noAlarms}</strong>
-          </div>
-          <span className="next-line">{headerTargetLabel}</span>
-        </div>
-
         <button
           type="button"
           className="icon-button topbar-action"
@@ -946,6 +1205,13 @@ function App() {
 
       <section className="main-grid">
         <form className="composer" onSubmit={submitAlarm}>
+          <input
+            ref={soundFileInputRef}
+            type="file"
+            accept=".mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,audio/*"
+            hidden
+            onChange={(event) => void importSelectedSound(event)}
+          />
           <div className="section-head">
             <h1>{editingId ? messages.editAlarm : messages.newAlarm}</h1>
           </div>
@@ -962,7 +1228,8 @@ function App() {
               className={scheduleMode === "absolute" ? "toggle-button active" : "toggle-button"}
               onClick={() => setScheduleMode("absolute")}
             >
-              {messages.dateTime}
+              <CalendarClock size={13} />
+              {messages.alarm}
             </button>
             <button
               type="button"
@@ -978,6 +1245,7 @@ function App() {
                 }));
               }}
             >
+              <Clock3 size={13} />
               {messages.countdown}
             </button>
           </div>
@@ -1264,6 +1532,25 @@ function App() {
               {composer.soundEnabled ? <Bell size={13} /> : <BellOff size={13} />}
               {composer.soundEnabled ? messages.sound : messages.silent}
             </button>
+            <button type="button" className="secondary-button" onClick={() => soundFileInputRef.current?.click()}>
+              <FolderOpen size={13} />
+              {messages.chooseSound}
+            </button>
+            {composer.soundSource ? (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setComposer((current) => ({ ...current, soundSource: null }))}
+                aria-label={messages.clearSound}
+                title={messages.clearSound}
+              >
+                <X size={13} />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="repeat-summary">
+            {messages.customSound}: {getSoundLabel(composer.soundSource) ?? messages.defaultSound}
           </div>
 
           <textarea
@@ -1276,7 +1563,7 @@ function App() {
           {error ? <div className="error-banner">{error}</div> : null}
 
           {editingId ? (
-            <button type="button" className="secondary-button full-width" onClick={resetComposer}>
+            <button type="button" className="secondary-button full-width" onClick={() => resetComposer()}>
               {messages.cancel}
             </button>
           ) : null}
@@ -1380,7 +1667,7 @@ function App() {
                 value={state.settings.locale}
                 onChange={(event) => setLocale(event.target.value as AppLocale)}
               >
-                {(["system", "es", "ca", "en"] as AppLocale[]).map((locale) => (
+                {(["system", "es", "ca", "en", "ga", "eu"] as AppLocale[]).map((locale) => (
                   <option key={locale} value={locale}>
                     {LOCALE_LABELS[locale][appLocale]}
                   </option>

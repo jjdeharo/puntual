@@ -8,6 +8,7 @@ const DEFAULT_STATE = {
     launchAtLogin: true,
     silenceWhileWindowOpen: false,
     locale: "system",
+    lastSoundSource: null,
   },
 };
 
@@ -73,6 +74,7 @@ function normalizeState(value) {
   };
 
   settings.locale = normalizeLocale(settings.locale);
+  settings.lastSoundSource = normalizeSoundSource(settings.lastSoundSource);
 
   return { alarms, settings };
 }
@@ -99,6 +101,7 @@ function normalizeAlarm(value) {
     createdAt,
     updatedAt,
     soundEnabled: value.soundEnabled !== false,
+    soundSource: normalizeSoundSource(value.soundSource),
     status: normalizeStatus(value.status),
     acknowledgedAt: Number.isFinite(Number(value.acknowledgedAt))
       ? Number(value.acknowledgedAt)
@@ -111,5 +114,11 @@ function normalizeStatus(value) {
 }
 
 function normalizeLocale(value) {
-  return value === "es" || value === "ca" || value === "en" || value === "system" ? value : "system";
+  return value === "es" || value === "ca" || value === "en" || value === "ga" || value === "eu" || value === "system"
+    ? value
+    : "system";
+}
+
+function normalizeSoundSource(value) {
+  return typeof value === "string" && value.startsWith("file://") ? value : null;
 }

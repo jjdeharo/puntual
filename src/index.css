@@ -1,7 +1,6 @@
 @import "@fontsource/manrope/400.css";
 @import "@fontsource/manrope/500.css";
 @import "@fontsource/manrope/700.css";
-@import "@fontsource/fraunces/600.css";
 
 :root {
   font-family: var(--font-sans);
@@ -16,7 +15,6 @@
   -moz-osx-font-smoothing: grayscale;
 
   --font-sans: "Manrope", "Segoe UI", sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
   --ink-strong: #1f2a36;
   --ink-soft: #4e5d6d;
   --ink-faint: #748292;

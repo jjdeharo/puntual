@@ -1,6 +1,8 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, nativeTheme, shell } from "electron";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, nativeTheme, shell } from "electron";
 import { createAlarmStore } from "./alarm-store.mjs";
 import { advanceAlarm, createStoredRepeat } from "./recurrence.mjs";
 import { createAlarmScheduler } from "./scheduler.mjs";
@@ -8,6 +10,7 @@ import { createAlarmScheduler } from "./scheduler.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 const isAutoLaunch = process.argv.includes("--autostart");
+const linuxAutoStartDesktopFileName = "io.jjdeharo.puntual.desktop";
 
 let mainWindow = null;
 let tray = null;
@@ -26,6 +29,111 @@ function getWindowUrl() {
   return `file://${path.join(__dirname, "..", "dist", "renderer", "index.html")}`;
 }
 
+function syncLaunchAtLogin(enabled) {
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    args: ["--autostart"],
+  });
+
+  if (process.platform === "linux") {
+    syncLinuxAutoStart(enabled);
+  }
+}
+
+function syncLinuxAutoStart(enabled) {
+  try {
+    const desktopEntryPath = getLinuxAutoStartDesktopEntryPath();
+
+    if (!desktopEntryPath) {
+      return;
+    }
+
+    if (!enabled) {
+      fs.rmSync(desktopEntryPath, { force: true });
+      return;
+    }
+
+    const execPath = getLinuxAutoStartExecPath();
+    if (!execPath) {
+      log("linux autostart skipped: executable path unavailable");
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(desktopEntryPath), { recursive: true });
+    fs.writeFileSync(desktopEntryPath, buildLinuxAutoStartDesktopEntry(execPath), "utf8");
+  } catch (error) {
+    log("linux autostart sync failed", error);
+  }
+}
+
+function getLinuxAutoStartDesktopEntryPath() {
+  const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  return path.join(configHome, "autostart", linuxAutoStartDesktopFileName);
+}
+
+function getLinuxAutoStartExecPath() {
+  const appImagePath = process.env.APPIMAGE;
+  if (appImagePath) {
+    return appImagePath;
+  }
+
+  const executablePath = app.getPath("exe");
+  if (executablePath) {
+    return executablePath;
+  }
+
+  return null;
+}
+
+function buildLinuxAutoStartDesktopEntry(execPath) {
+  const quotedExec = quoteDesktopEntryValue(execPath);
+  const iconPath = quoteDesktopEntryValue(path.join(__dirname, "notification-icon.png"));
+
+  return [
+    "[Desktop Entry]",
+    "Type=Application",
+    "Version=1.0",
+    "Name=Puntual",
+    "Comment=Alarma de escritorio con bandeja del sistema",
+    `Exec=${quotedExec} --autostart`,
+    `Icon=${iconPath}`,
+    "Terminal=false",
+    "StartupNotify=false",
+    "Categories=Utility;",
+    "X-GNOME-Autostart-enabled=true",
+  ].join("\n");
+}
+
+function quoteDesktopEntryValue(value) {
+  return `"${String(value).replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"`;
+}
+
+function sanitizeImportedFileName(value) {
+  const base = path.basename(String(value ?? "sound")).replace(/[^\w.-]+/g, "-");
+  return base || "sound";
+}
+
+function getAudioMimeType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  switch (extension) {
+    case ".mp3":
+      return "audio/mpeg";
+    case ".wav":
+      return "audio/wav";
+    case ".ogg":
+    case ".oga":
+      return "audio/ogg";
+    case ".m4a":
+      return "audio/mp4";
+    case ".aac":
+      return "audio/aac";
+    case ".flac":
+      return "audio/flac";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 860,
@@ -34,9 +142,10 @@ function createWindow() {
     minHeight: 500,
     show: false,
     title: "Puntual",
+    icon: path.join(__dirname, "tray-icon.png"),
     backgroundColor: getWindowBackgroundColor(),
     autoHideMenuBar: true,
-    titleBarStyle: "hiddenInset",
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -128,7 +237,7 @@ function sendState(state = store.getState()) {
 
 function normalizeLocale(value) {
   const base = String(value ?? "").toLowerCase().split("-")[0];
-  return base === "ca" || base === "en" ? base : "es";
+  return base === "ca" || base === "en" || base === "ga" || base === "eu" ? base : "es";
 }
 
 function getResolvedLocale(setting = store.getState().settings.locale) {
@@ -159,6 +268,28 @@ function t(state, key, variables = {}) {
       tray_next_item: "Següent: {value}",
       tray_none_scheduled: "No hi ha alarmes programades",
       tray_quit: "Sortir",
+    },
+    ga: {
+      tray_idle: "Puntual",
+      tray_ringing: "{count} soando",
+      tray_next: "Próxima alarma ás {time}",
+      tray_open: "Abrir Puntual",
+      tray_silence: "Silenciar {count} alarma{suffix}",
+      tray_none_ringing: "Non hai alarmas soando",
+      tray_next_item: "Seguinte: {value}",
+      tray_none_scheduled: "Sen alarmas programadas",
+      tray_quit: "Saír",
+    },
+    eu: {
+      tray_idle: "Puntual",
+      tray_ringing: "{count} jotzen",
+      tray_next: "Hurrengo alarma: {time}",
+      tray_open: "Ireki Puntual",
+      tray_silence: "Isilarazi {count} alarma{suffix}",
+      tray_none_ringing: "Ez dago alarmarik jotzen",
+      tray_next_item: "Hurrengoa: {value}",
+      tray_none_scheduled: "Ez dago alarmarik programatuta",
+      tray_quit: "Irten",
     },
     en: {
       tray_idle: "Puntual",
@@ -253,6 +384,8 @@ function validateAlarmInput(payload, requireId = false) {
   const notes = String(payload?.notes ?? "").trim();
   const targetAt = Number(payload?.targetAt);
   const soundEnabled = payload?.soundEnabled !== false;
+  const soundSource =
+    typeof payload?.soundSource === "string" && payload.soundSource.startsWith("file://") ? payload.soundSource : null;
 
   if (requireId && !payload?.id) {
     throw new Error("Falta el id de la alarma.");
@@ -288,6 +421,7 @@ function validateAlarmInput(payload, requireId = false) {
     notes,
     targetAt,
     soundEnabled,
+    soundSource,
     repeat,
   };
 }
@@ -300,10 +434,7 @@ app.whenReady().then(() => {
     mainWindow?.setBackgroundColor(getWindowBackgroundColor());
   });
 
-  app.setLoginItemSettings({
-    openAtLogin: store.getState().settings.launchAtLogin,
-    args: ["--autostart"],
-  });
+  syncLaunchAtLogin(store.getState().settings.launchAtLogin);
 
   scheduler.start();
   sendState(store.getState());
@@ -316,11 +447,71 @@ app.whenReady().then(() => {
     return shell.openExternal(targetUrl);
   });
 
+  ipcMain.handle("dialog:choose-sound-file", async () => {
+    const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
+      title: "Selecciona un sonido",
+      properties: ["openFile"],
+      filters: [
+        { name: "Audio", extensions: ["mp3", "wav", "ogg", "oga", "m4a", "aac", "flac"] },
+        { name: "Todos los archivos", extensions: ["*"] },
+      ],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const filePath = result.filePaths[0];
+    return {
+      url: pathToFileURL(filePath).href,
+      name: path.basename(filePath),
+    };
+  });
+
+  ipcMain.handle("sound:import-file", async (_event, payload) => {
+    const name = sanitizeImportedFileName(payload?.name);
+    const extension = path.extname(name).toLowerCase();
+    const allowedExtensions = new Set([".mp3", ".wav", ".ogg", ".oga", ".m4a", ".aac", ".flac"]);
+    if (!allowedExtensions.has(extension)) {
+      throw new Error("Formato de audio no permitido.");
+    }
+
+    const sourceBuffer = payload?.buffer;
+    if (!(sourceBuffer instanceof ArrayBuffer) || sourceBuffer.byteLength === 0) {
+      throw new Error("Archivo de audio no válido.");
+    }
+
+    const soundsDir = path.join(app.getPath("userData"), "sounds");
+    fs.mkdirSync(soundsDir, { recursive: true });
+    const targetFileName = `${crypto.randomUUID()}-${name}`;
+    const targetPath = path.join(soundsDir, targetFileName);
+    fs.writeFileSync(targetPath, Buffer.from(sourceBuffer));
+
+    return {
+      url: pathToFileURL(targetPath).href,
+      name,
+    };
+  });
+
+  ipcMain.handle("sound:read-file", async (_event, targetUrl) => {
+    if (typeof targetUrl !== "string" || !targetUrl.startsWith("file://")) {
+      throw new Error("Ruta de sonido no válida.");
+    }
+
+    const filePath = fileURLToPath(targetUrl);
+    const fileBuffer = fs.readFileSync(filePath);
+    return {
+      buffer: Uint8Array.from(fileBuffer),
+      mimeType: getAudioMimeType(filePath),
+    };
+  });
+
   ipcMain.handle("alarm:create", (_event, payload) => {
     const input = validateAlarmInput(payload, false);
     const now = Date.now();
     const nextState = store.mutate((current) => ({
       ...current,
+      settings: { ...current.settings, lastSoundSource: input.soundSource },
       alarms: [
         ...current.alarms,
         {
@@ -341,6 +532,7 @@ app.whenReady().then(() => {
     const input = validateAlarmInput(payload, true);
     const nextState = store.mutate((current) => ({
       ...current,
+      settings: { ...current.settings, lastSoundSource: input.soundSource },
       alarms: current.alarms.map((alarm) =>
         alarm.id === input.id
           ? {
@@ -389,7 +581,7 @@ app.whenReady().then(() => {
       },
     }));
 
-    app.setLoginItemSettings({ openAtLogin: launchAtLogin, args: ["--autostart"] });
+    syncLaunchAtLogin(launchAtLogin);
     sendState(nextState);
     return nextState;
   });

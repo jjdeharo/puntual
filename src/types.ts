@@ -1,5 +1,5 @@
 export type AlarmStatus = "scheduled" | "ringing" | "dismissed";
-export type AppLocale = "system" | "es" | "ca" | "en";
+export type AppLocale = "system" | "es" | "ca" | "en" | "ga" | "eu";
 export type AlarmRepeatKind = "none" | "daily" | "workdays" | "weekly" | "monthly" | "yearly";
 export type AlarmRepeatEndType = "never" | "onDate" | "afterCount";
 export type AlarmMonthlyMode = "dayOfMonth" | "weekdayOfMonth";
@@ -38,6 +38,7 @@ export type Alarm = {
   createdAt: number;
   updatedAt: number;
   soundEnabled: boolean;
+  soundSource: string | null;
   status: AlarmStatus;
   acknowledgedAt: number | null;
 };
@@ -46,6 +47,7 @@ export type AlarmSettings = {
   launchAtLogin: boolean;
   silenceWhileWindowOpen: boolean;
   locale: AppLocale;
+  lastSoundSource: string | null;
 };
 
 export type AlarmState = {
@@ -58,6 +60,7 @@ export type AlarmInput = {
   notes: string;
   targetAt: number;
   soundEnabled: boolean;
+  soundSource: string | null;
   repeat: AlarmRepeatInput;
 };
 
@@ -75,6 +78,9 @@ declare global {
       deleteAlarm: (id: string) => Promise<AlarmState>;
       setLaunchAtLogin: (enabled: boolean) => Promise<AlarmState>;
       setLocale: (locale: AppLocale) => Promise<AlarmState>;
+      chooseSoundFile: () => Promise<{ url: string; name: string } | null>;
+      importSoundFile: (payload: { name: string; buffer: ArrayBuffer }) => Promise<{ url: string; name: string }>;
+      readSoundFile: (url: string) => Promise<{ buffer: Uint8Array; mimeType: string }>;
       showWindow: () => Promise<void>;
       openExternal: (url: string) => Promise<void>;
       onState: (listener: (state: AlarmState) => void) => () => void;

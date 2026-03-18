@@ -18,11 +18,11 @@
 }
 
 .topbar {
-  padding: 10px 12px;
+  padding: 8px 12px;
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand {
@@ -46,66 +46,35 @@
 
 .brand-copy {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
-.brand-copy strong,
-.status-line strong {
+.brand-copy strong {
   color: var(--ink-strong);
 }
 
 .brand-copy strong {
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.1;
 }
 
 .brand-copy span,
-.next-line,
 .sound-pill,
 .alarm-copy span,
 .alarm-copy small,
 .history-row small {
   color: var(--ink-faint);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
 }
 
-.topbar-center {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-line strong {
-  font-size: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.state-chip,
 .sound-pill {
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--panel-muted);
-}
-
-.state-chip {
-  color: var(--ink-soft);
-  font-size: 0.75rem;
-}
-
-.state-chip.alert {
-  background: var(--panel-alert);
-  border-color: var(--line-alert);
-  color: #8e5c20;
+  font-size: 0.78rem;
+  line-height: 1.2;
 }
 
 .sound-pill.active {
@@ -138,6 +107,7 @@
   gap: 10px;
   overflow: auto;
   padding-bottom: 16px;
+  font-size: 0.9rem;
 }
 
 .section-head,
@@ -168,8 +138,7 @@
 }
 
 .section-head h1 {
-  font-size: 1.02rem;
-  font-family: var(--font-display);
+  font-size: 0.94rem;
 }
 
 .list-head h2 {
@@ -180,12 +149,17 @@
 .composer textarea,
 .composer select {
   width: 100%;
-  padding: 9px 10px;
+  padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
   color: var(--ink-strong);
   outline: none;
+}
+
+.composer input,
+.composer select {
+  min-height: 34px;
 }
 
 .composer input:focus,
@@ -445,6 +419,8 @@
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
 .secondary-button.full-width {
@@ -463,6 +439,7 @@
   height: 32px;
   display: inline-grid;
   place-items: center;
+  font-size: 0.78rem;
 }
 
 .error-banner {
@@ -558,7 +535,6 @@
     grid-template-rows: auto auto;
   }
 
-  .status-line,
   .section-head,
   .composer-row,
   .alarm-row,

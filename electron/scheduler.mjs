@@ -1,9 +1,12 @@
+import { fileURLToPath } from "node:url";
 import { Notification, app } from "electron";
 import { advanceAlarm } from "./recurrence.mjs";
 
+const notificationIconPath = fileURLToPath(new URL("./notification-icon.png", import.meta.url));
+
 function normalizeLocale(value) {
   const base = String(value ?? "").toLowerCase().split("-")[0];
-  return base === "ca" || base === "en" ? base : "es";
+  return base === "ca" || base === "en" || base === "ga" || base === "eu" ? base : "es";
 }
 
 function getLocale(state) {
@@ -24,6 +27,18 @@ function t(state, key) {
       pending: "Alarma pendent en tornar a iniciar",
       active: "Alarma activada",
       click_to_stop: "Fes clic per aturar-la.",
+    },
+    ga: {
+      untitled: "Alarma sen título",
+      pending: "Alarma pendente ao volver iniciar",
+      active: "Alarma activada",
+      click_to_stop: "Fai clic para detela.",
+    },
+    eu: {
+      untitled: "Izenbururik gabeko alarma",
+      pending: "Berriro irekitzean zain dagoen alarma",
+      active: "Alarma aktibatuta",
+      click_to_stop: "Egin klik gelditzeko.",
     },
     en: {
       untitled: "Untitled alarm",
@@ -131,6 +146,7 @@ export function createAlarmScheduler({ store, onStateChange, onRingStateChange }
     const notification = new Notification({
       title: recovered ? t(state, "pending") : t(state, "active"),
       body: `${ringMessage(alarm, state)}. ${t(state, "click_to_stop")}`,
+      icon: notificationIconPath,
       urgency: "critical",
       // The renderer is responsible for alarm audio so the system notification stays silent.
       silent: true,
