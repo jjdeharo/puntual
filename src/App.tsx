@@ -30,6 +30,7 @@ const fallbackState: AlarmState = {
 const APP_VERSION = __APP_VERSION__;
 const APP_LICENSE = __APP_LICENSE__;
 const APP_REPOSITORY = __APP_REPOSITORY__;
+const APP_WEBSITE = "https://jjdeharo.github.io/puntual/";
 const LATEST_RELEASE_API = "https://api.github.com/repos/jjdeharo/puntual/releases/latest";
 const AUTO_UPDATE_CHECK_KEY = "puntual:last-update-check-at";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -149,7 +150,9 @@ const MESSAGES = {
     version: "Versión",
     license: "Licencia",
     repository: "Repositorio",
+    website: "Web",
     openRepo: "Abrir repo",
+    openWebsite: "Abrir web",
     downloads: "Descargas",
     checkUpdates: "Buscar actualizaciones",
     checkingUpdates: "Consultando la última release publicada...",
@@ -238,7 +241,9 @@ const MESSAGES = {
     version: "Versió",
     license: "Llicència",
     repository: "Repositori",
+    website: "Web",
     openRepo: "Obre el repo",
+    openWebsite: "Obre la web",
     downloads: "Descàrregues",
     checkUpdates: "Comprova actualitzacions",
     checkingUpdates: "Consultant l'última release publicada...",
@@ -327,7 +332,9 @@ const MESSAGES = {
     version: "Versión",
     license: "Licenza",
     repository: "Repositorio",
+    website: "Web",
     openRepo: "Abrir repo",
+    openWebsite: "Abrir web",
     downloads: "Descargas",
     checkUpdates: "Buscar actualizacións",
     checkingUpdates: "Consultando a última release publicada...",
@@ -416,7 +423,9 @@ const MESSAGES = {
     version: "Bertsioa",
     license: "Lizentzia",
     repository: "Biltegia",
+    website: "Webgunea",
     openRepo: "Ireki repoa",
+    openWebsite: "Ireki webgunea",
     downloads: "Deskargak",
     checkUpdates: "Bilatu eguneraketak",
     checkingUpdates: "Argitaratutako azken release-a kontsultatzen...",
@@ -505,7 +514,9 @@ const MESSAGES = {
     version: "Version",
     license: "License",
     repository: "Repository",
+    website: "Website",
     openRepo: "Open repo",
+    openWebsite: "Open website",
     downloads: "Downloads",
     checkUpdates: "Check for updates",
     checkingUpdates: "Checking the latest published release...",
@@ -1962,12 +1973,20 @@ function App() {
                 <dt>{messages.repository}</dt>
                 <dd>{APP_REPOSITORY.replace(/^https?:\/\//, "")}</dd>
               </div>
+              <div>
+                <dt>{messages.website}</dt>
+                <dd>{APP_WEBSITE.replace(/^https?:\/\//, "")}</dd>
+              </div>
             </dl>
 
             <div className="about-actions">
               <button type="button" className="secondary-button" onClick={() => openExternal(APP_REPOSITORY)}>
                 <ExternalLink size={13} />
                 {messages.openRepo}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => openExternal(APP_WEBSITE)}>
+                <ExternalLink size={13} />
+                {messages.openWebsite}
               </button>
               <button type="button" className="secondary-button" onClick={() => openExternal(`${APP_REPOSITORY}/releases/latest`)}>
                 <ExternalLink size={13} />
