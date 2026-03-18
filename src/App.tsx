@@ -107,6 +107,7 @@ const MESSAGES = {
     defaultSound: "Sonido por defecto",
     silent: "Silencio",
     repeat: "Repetir",
+    repeatAlarm: "Repetir alarma",
     repeatTimer: "Repetir temporizador",
     noRepeat: "No repetir",
     repeatDaily: "Cada día",
@@ -195,6 +196,7 @@ const MESSAGES = {
     defaultSound: "So per defecte",
     silent: "Silenci",
     repeat: "Repeteix",
+    repeatAlarm: "Repeteix alarma",
     repeatTimer: "Repeteix temporitzador",
     noRepeat: "No es repeteix",
     repeatDaily: "Cada dia",
@@ -283,6 +285,7 @@ const MESSAGES = {
     defaultSound: "Son predeterminado",
     silent: "Silencio",
     repeat: "Repetir",
+    repeatAlarm: "Repetir alarma",
     repeatTimer: "Repetir temporizador",
     noRepeat: "Non repetir",
     repeatDaily: "Cada día",
@@ -371,6 +374,7 @@ const MESSAGES = {
     defaultSound: "Lehenetsitako soinua",
     silent: "Isilik",
     repeat: "Errepikatu",
+    repeatAlarm: "Errepikatu alarma",
     repeatTimer: "Errepikatu tenporizadorea",
     noRepeat: "Ez errepikatu",
     repeatDaily: "Egunero",
@@ -459,6 +463,7 @@ const MESSAGES = {
     defaultSound: "Default sound",
     silent: "Silent",
     repeat: "Repeat",
+    repeatAlarm: "Repeat alarm",
     repeatTimer: "Repeat timer",
     noRepeat: "Does not repeat",
     repeatDaily: "Every day",
@@ -1508,42 +1513,82 @@ function App() {
                 </label>
               </div>
 
-              <label className="field-block">
-                <span>{messages.repeat}</span>
-                <select
-                  className="settings-select"
-                  value={composer.repeatKind}
+              <label className="checkbox-inline prominent">
+                <input
+                  type="checkbox"
+                  checked={composer.repeatKind !== "none"}
                   onChange={(event) => {
-                    const nextKind = event.target.value as AlarmRepeatKind;
                     const nextTargetAt = parseAbsoluteTarget(composer.targetDate, composer.targetTime);
                     const nextMonthlyPattern =
                       Number.isFinite(nextTargetAt) ? getMonthlyPatternFromTimestamp(nextTargetAt) : null;
                     setComposer((current) => ({
                       ...current,
-                      repeatKind: nextKind,
+                      repeatKind: event.target.checked ? (current.repeatKind === "none" ? "daily" : current.repeatKind) : "none",
                       repeatWeekDays:
-                        nextKind === "weekly"
+                        event.target.checked && current.repeatKind === "weekly"
                           ? current.repeatWeekDays.length > 0
                             ? current.repeatWeekDays
                             : Number.isFinite(nextTargetAt)
                               ? [getWeekdayNumber(nextTargetAt)]
                               : []
                           : [],
-                      repeatMonthlyMode: nextKind === "monthly" ? current.repeatMonthlyMode : "dayOfMonth",
-                      repeatMonthlyWeek: nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeek : current.repeatMonthlyWeek,
+                      repeatMonthlyMode: event.target.checked && current.repeatKind === "monthly" ? current.repeatMonthlyMode : "dayOfMonth",
+                      repeatMonthlyWeek:
+                        event.target.checked && current.repeatKind === "monthly" && nextMonthlyPattern
+                          ? nextMonthlyPattern.monthlyWeek
+                          : current.repeatMonthlyWeek,
                       repeatMonthlyWeekDay:
-                        nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeekDay : current.repeatMonthlyWeekDay,
-                      repeatEndType: nextKind === "none" ? "never" : current.repeatEndType,
+                        event.target.checked && current.repeatKind === "monthly" && nextMonthlyPattern
+                          ? nextMonthlyPattern.monthlyWeekDay
+                          : current.repeatMonthlyWeekDay,
+                      repeatEndType: event.target.checked ? (current.repeatEndType === "never" ? "never" : current.repeatEndType) : "never",
+                      repeatEndDate: event.target.checked ? current.repeatEndDate : "",
+                      repeatEndTime: "",
                     }));
                   }}
-                >
-                  <option value="none">{messages.noRepeat}</option>
-                  <option value="daily">{messages.repeatDaily}</option>
-                  <option value="weekly">{messages.repeatWeekly}</option>
-                  <option value="monthly">{messages.repeatMonthly}</option>
-                  <option value="yearly">{messages.repeatYearly}</option>
-                </select>
+                />
+                <span>{messages.repeatAlarm}</span>
               </label>
+
+              {composer.repeatKind !== "none" ? (
+                <label className="field-block">
+                  <span>{messages.repeat}</span>
+                  <select
+                    className="settings-select"
+                    value={composer.repeatKind}
+                    onChange={(event) => {
+                      const nextKind = event.target.value as AlarmRepeatKind;
+                      const nextTargetAt = parseAbsoluteTarget(composer.targetDate, composer.targetTime);
+                      const nextMonthlyPattern =
+                        Number.isFinite(nextTargetAt) ? getMonthlyPatternFromTimestamp(nextTargetAt) : null;
+                      setComposer((current) => ({
+                        ...current,
+                        repeatKind: nextKind,
+                        repeatWeekDays:
+                          nextKind === "weekly"
+                            ? current.repeatWeekDays.length > 0
+                              ? current.repeatWeekDays
+                              : Number.isFinite(nextTargetAt)
+                                ? [getWeekdayNumber(nextTargetAt)]
+                                : []
+                            : [],
+                        repeatMonthlyMode: nextKind === "monthly" ? current.repeatMonthlyMode : "dayOfMonth",
+                        repeatMonthlyWeek:
+                          nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeek : current.repeatMonthlyWeek,
+                        repeatMonthlyWeekDay:
+                          nextKind === "monthly" && nextMonthlyPattern ? nextMonthlyPattern.monthlyWeekDay : current.repeatMonthlyWeekDay,
+                        repeatEndType: current.repeatEndType,
+                      }));
+                    }}
+                  >
+                    <option value="daily">{messages.repeatDaily}</option>
+                    <option value="workdays">{messages.repeatWorkdays}</option>
+                    <option value="weekly">{messages.repeatWeekly}</option>
+                    <option value="monthly">{messages.repeatMonthly}</option>
+                    <option value="yearly">{messages.repeatYearly}</option>
+                  </select>
+                </label>
+              ) : null}
 
               {composer.repeatKind === "weekly" ? (
                 <div className="field-block">
