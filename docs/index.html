@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Puntual | Alarma de escritorio sencilla y persistente</title>
+    <meta
+      name="description"
+      content="Puntual es una app de escritorio para alarmas y temporizadores con bandeja del sistema, recurrencia, sonidos personalizados y persistencia real."
+    />
+    <link rel="icon" href="./assets/puntual-icon.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <nav class="topbar">
+          <a class="brand" href="#inicio">
+            <img src="./assets/puntual-icon.png" alt="Icono de Puntual" width="40" height="40" />
+            <span>Puntual</span>
+          </a>
+          <div class="topbar-links">
+            <a href="#funciones">Funciones</a>
+            <a href="#capturas">Capturas</a>
+            <a href="#descargas">Descargar</a>
+          </div>
+        </nav>
+
+        <section id="inicio" class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Alarma de escritorio para Linux, Windows y macOS</p>
+            <h1>Alarmas y temporizadores que siguen ahí cuando cierras la ventana o reinicias el equipo.</h1>
+            <p class="hero-text">
+              Puntual está pensado para usarlo como una utilidad real de escritorio: vive en la bandeja,
+              recuerda tus alarmas, permite recurrencias, admite sonidos personalizados y no obliga a dejar
+              una web abierta para que funcione.
+            </p>
+
+            <p class="hero-note">
+              También permite alarmas repetidas: diarias, en días laborables, semanales, mensuales y anuales,
+              con fecha de fin o número máximo de repeticiones.
+            </p>
+
+            <div class="hero-actions">
+              <a class="primary-link" href="#descargas">Descargar</a>
+              <a class="secondary-link" href="https://github.com/jjdeharo/puntual/releases/latest">Ver la última release</a>
+            </div>
+
+            <dl class="hero-facts">
+              <div>
+                <dt>Última versión</dt>
+                <dd id="latest-version">Consultando...</dd>
+              </div>
+              <div>
+                <dt>Licencia</dt>
+                <dd>AGPL-3.0-or-later</dd>
+              </div>
+              <div>
+                <dt>Idiomas</dt>
+                <dd>es, ca, en, ga, eu</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="hero-shot">
+            <div class="shot-card">
+              <img src="./assets/screenshot-main.png" alt="Pantalla principal de Puntual con el formulario de nueva alarma y la lista de alarmas activas." />
+            </div>
+          </div>
+        </section>
+      </header>
+
+      <main>
+        <section id="funciones" class="section">
+          <div class="section-head">
+            <p class="eyebrow">Qué hace</p>
+            <h2>Una app pequeña, clara y útil para no depender del navegador.</h2>
+          </div>
+
+          <div class="feature-grid">
+            <article class="feature-card">
+              <h3>Alarmas y temporizadores</h3>
+              <p>
+                Puedes crear una alarma para una fecha y hora concretas o lanzar un temporizador con cuenta
+                atrás. El formulario mantiene el modo que estás usando para no entorpecer el flujo.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <h3>Persistencia real</h3>
+              <p>
+                Las alarmas quedan guardadas localmente. Si cierras la ventana o reinicias el sistema,
+                Puntual recupera su estado y sigue siendo una herramienta de escritorio, no un experimento.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <h3>Recurrencias completas</h3>
+              <p>
+                Permite repeticiones diarias, laborales, semanales, mensuales y anuales, con fecha de fin o
+                límite de repeticiones cuando lo necesitas.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <h3>Sonido por alarma</h3>
+              <p>
+                Cada alarma o temporizador puede usar el sonido integrado o un archivo propio. El último
+                sonido seleccionado queda listo por defecto para la siguiente creación.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <h3>Bandeja y arranque automático</h3>
+              <p>
+                La app puede iniciar con el sistema y quedarse minimizada en la bandeja. Así está disponible
+                sin ocupar espacio ni interrumpir el trabajo.
+              </p>
+            </article>
+
+            <article class="feature-card">
+              <h3>Actualización y descargas desde GitHub</h3>
+              <p>
+                Incluye acceso a la release publicada y comprobación manual de actualizaciones. En esta misma
+                página también tienes los enlaces de descarga listos para cada sistema.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-soft">
+          <div class="section-head narrow">
+            <p class="eyebrow">Cómo se usa</p>
+            <h2>Curva de aprendizaje casi nula.</h2>
+          </div>
+
+          <div class="repeat-banner">
+            <strong>Alarmas recurrentes</strong>
+            <span>Puntual no se limita a una sola alarma puntual: puedes programar repeticiones diarias, laborales, semanales, mensuales o anuales.</span>
+          </div>
+
+          <div class="steps-grid">
+            <article class="step-card">
+              <span class="step-number">1</span>
+              <h3>Elige Alarma o Temporizador</h3>
+              <p>Selecciona si quieres programar una fecha concreta o una cuenta atrás.</p>
+            </article>
+
+            <article class="step-card">
+              <span class="step-number">2</span>
+              <h3>Ajusta repetición y sonido</h3>
+              <p>Añade recurrencia, notas y un sonido integrado o personalizado si te hace falta.</p>
+            </article>
+
+            <article class="step-card">
+              <span class="step-number">3</span>
+              <h3>Déjala trabajando</h3>
+              <p>La app puede quedarse en la bandeja y seguir pendiente de las alarmas sin dejar la ventana abierta.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="capturas" class="section">
+          <div class="section-head">
+            <p class="eyebrow">Capturas</p>
+            <h2>Interfaz compacta, con todo a la vista.</h2>
+          </div>
+
+          <div class="gallery">
+            <figure class="gallery-card gallery-card-wide">
+              <img src="./assets/screenshot-main.png" alt="Vista principal de Puntual con panel de nueva alarma y lista de alarmas activas." />
+              <figcaption>
+                <strong>Vista principal</strong>
+                <span>Formulario de creación a la izquierda y alarmas activas a la derecha.</span>
+              </figcaption>
+            </figure>
+
+            <figure class="gallery-card">
+              <img src="./assets/screenshot-settings.png" alt="Ventana de configuración de Puntual con selector de idioma y opción de iniciar con el sistema." />
+              <figcaption>
+                <strong>Configuración</strong>
+                <span>Idioma de la app y arranque con el sistema.</span>
+              </figcaption>
+            </figure>
+
+            <figure class="gallery-card">
+              <img src="./assets/screenshot-about.png" alt="Ventana Acerca de Puntual con versión, licencia, repositorio y accesos a descargas." />
+              <figcaption>
+                <strong>Información y actualizaciones</strong>
+                <span>Versión, licencia, repositorio y accesos directos a la release.</span>
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="descargas" class="section section-accent">
+          <div class="section-head">
+            <p class="eyebrow">Descargas</p>
+            <h2>Instala la versión que toque en tu sistema.</h2>
+          </div>
+
+          <div class="downloads-grid">
+            <article class="download-card">
+              <h3>Linux</h3>
+              <p>Paquete `.deb` para Debian, Ubuntu, MX Linux y derivadas, además de AppImage para usar sin instalar.</p>
+              <div class="download-links">
+                <a id="linux-deb-link" class="download-link primary" href="https://github.com/jjdeharo/puntual/releases/latest">Descargar `.deb`</a>
+                <a id="linux-appimage-link" class="download-link" href="https://github.com/jjdeharo/puntual/releases/latest">Descargar AppImage</a>
+              </div>
+            </article>
+
+            <article class="download-card">
+              <h3>Windows</h3>
+              <p>Ejecutable portátil y paquete `.zip` generados automáticamente en cada release publicada.</p>
+              <div class="download-links">
+                <a id="windows-exe-link" class="download-link primary" href="https://github.com/jjdeharo/puntual/releases/latest">Descargar `.exe`</a>
+                <a id="windows-zip-link" class="download-link" href="https://github.com/jjdeharo/puntual/releases/latest">Descargar `.zip`</a>
+              </div>
+            </article>
+
+            <article class="download-card">
+              <h3>macOS</h3>
+              <p>Archivo `.zip` preparado desde la release para usar la app en sistemas Apple.</p>
+              <div class="download-links">
+                <a id="macos-zip-link" class="download-link primary" href="https://github.com/jjdeharo/puntual/releases/latest">Descargar `.zip`</a>
+              </div>
+            </article>
+          </div>
+
+          <div class="release-panel">
+            <div>
+              <p class="release-label">Release publicada</p>
+              <strong id="release-name">Cargando datos de GitHub...</strong>
+            </div>
+            <a class="secondary-link inverse" href="https://github.com/jjdeharo/puntual/releases/latest">Abrir página de release</a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>Puntual es una app de escritorio libre orientada a alarmas, temporizadores y recordatorios persistentes.</p>
+        <a href="https://github.com/jjdeharo/puntual">Repositorio en GitHub</a>
+      </footer>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
