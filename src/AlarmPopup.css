@@ -1,0 +1,343 @@
+body.alarm-popup-body {
+  background:
+    radial-gradient(circle at top left, rgba(240, 184, 102, 0.22), transparent 42%),
+    linear-gradient(180deg, #0d1926 0%, #07111a 100%);
+}
+
+.alarm-popup-shell {
+  height: 100%;
+  padding: 8px;
+  color: #f7efe3;
+  -webkit-app-region: drag;
+}
+
+.alarm-popup-shell.is-empty {
+  padding: 0;
+}
+
+.alarm-popup-card {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px 10px 9px;
+  border-radius: 18px;
+  border: 1px solid rgba(240, 184, 102, 0.34);
+  background:
+    linear-gradient(180deg, rgba(20, 33, 47, 0.96) 0%, rgba(8, 16, 25, 0.98) 100%);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-app-region: no-drag;
+  position: relative;
+  overflow: hidden;
+}
+
+.alarm-popup-dragbar {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 2px 0 1px;
+  -webkit-app-region: drag;
+  cursor: grab;
+  opacity: 0.88;
+}
+
+.alarm-popup-dragicon {
+  color: rgba(255, 216, 161, 0.72);
+  pointer-events: none;
+}
+
+.alarm-popup-draglabel {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 216, 161, 0.7);
+  pointer-events: none;
+}
+
+.alarm-popup-single,
+.alarm-popup-multi {
+  min-height: 0;
+}
+
+.alarm-popup-single {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.alarm-popup-multi {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.alarm-popup-single-copy {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 248, 236, 0.07);
+  border: 1px solid rgba(255, 211, 143, 0.16);
+}
+
+.alarm-popup-single-copy strong {
+  font-size: 0.98rem;
+  line-height: 1.2;
+  color: #fff8f0;
+}
+
+.alarm-popup-single-copy span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.77rem;
+  color: #d7bf9b;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alarm-popup-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 211, 143, 0.16);
+  background: rgba(255, 248, 236, 0.06);
+  color: #fff2dd;
+  font-weight: 700;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+.alarm-popup-collapsed-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  align-content: start;
+  min-height: 0;
+}
+
+.alarm-popup-collapsed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 248, 236, 0.04);
+  border: 1px solid rgba(255, 211, 143, 0.1);
+}
+
+.alarm-popup-collapsed-item strong,
+.alarm-popup-collapsed-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alarm-popup-collapsed-item strong {
+  font-size: 0.82rem;
+  color: #fff8f0;
+}
+
+.alarm-popup-collapsed-item span {
+  font-size: 0.72rem;
+  color: #d7bf9b;
+}
+
+.alarm-popup-list {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-y: auto;
+  padding-right: 3px;
+  -webkit-app-region: no-drag;
+}
+
+.alarm-popup-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alarm-popup-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 210, 151, 0.28);
+}
+
+.alarm-popup-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(255, 248, 236, 0.07);
+  border: 1px solid rgba(255, 211, 143, 0.14);
+}
+
+.alarm-popup-item-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  flex: 1 1 auto;
+}
+
+.alarm-popup-item-copy strong {
+  font-size: 0.84rem;
+  color: #fff8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alarm-popup-item-copy span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: #d7bf9b;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alarm-popup-single-copy span svg,
+.alarm-popup-item-copy span svg {
+  flex: 0 0 auto;
+}
+
+.alarm-popup-dismiss,
+.alarm-popup-chip,
+.alarm-popup-dismiss-main {
+  -webkit-app-region: no-drag;
+  border: 0;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.alarm-popup-dismiss:hover,
+.alarm-popup-chip:hover,
+.alarm-popup-dismiss-main:hover {
+  transform: translateY(-1px);
+}
+
+.alarm-popup-dismiss {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+  background: rgba(255, 209, 149, 0.1);
+  color: #ffe0b1;
+  border: 1px solid rgba(255, 209, 149, 0.16);
+}
+
+.alarm-popup-footer {
+  display: grid;
+  gap: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 211, 143, 0.08);
+  -webkit-app-region: no-drag;
+}
+
+.alarm-popup-snooze {
+  display: grid;
+  gap: 0;
+}
+
+.alarm-popup-snooze-trigger,
+.alarm-popup-chip {
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(242, 186, 108, 0.14);
+  color: #ffe9c6;
+  border: 1px solid rgba(255, 216, 161, 0.12);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.alarm-popup-chip.ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8e4c2;
+}
+
+.alarm-popup-dismiss-main {
+  justify-self: stretch;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f4be78 0%, #e0a354 100%);
+  color: #2f1803;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.alarm-popup-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(5, 10, 16, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.alarm-popup-overlay-card {
+  width: 100%;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 216, 161, 0.14);
+  background: rgba(14, 24, 35, 0.98);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
+}
+
+.alarm-popup-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.alarm-popup-overlay-field {
+  display: grid;
+  gap: 4px;
+}
+
+.alarm-popup-overlay-field span {
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d0ae80;
+}
+
+.alarm-popup-overlay-field input {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 216, 161, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff3df;
+  outline: none;
+}
+
+.alarm-popup-overlay-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}

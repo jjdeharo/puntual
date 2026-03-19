@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { format, formatDistanceStrict, isToday, isTomorrow } from "date-fns";
 import { ca, enUS, es, eu, gl } from "date-fns/locale";
 import { Bell, BellOff, CalendarClock, Clock3, ExternalLink, FolderOpen, Info, Plus, RefreshCw, Settings, Trash2, X } from "lucide-react";
@@ -13,6 +14,7 @@ import type {
   AlarmRepeatKind,
   AlarmState,
   AppLocale,
+  SnoozeDurationInput,
 } from "./types";
 
 const ALARM_SOUND_PATH = new URL("./assets/alarm-clock-elapsed.oga", import.meta.url).href;
@@ -24,6 +26,7 @@ const fallbackState: AlarmState = {
     silenceWhileWindowOpen: false,
     locale: "system",
     lastSoundSource: null,
+    alarmPopupPosition: null,
   },
 };
 
@@ -34,6 +37,7 @@ const APP_WEBSITE = "https://jjdeharo.github.io/puntual/";
 const LATEST_RELEASE_API = "https://api.github.com/repos/jjdeharo/puntual/releases/latest";
 const AUTO_UPDATE_CHECK_KEY = "puntual:last-update-check-at";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SNOOZE_FIELD_MAX = 999;
 
 type UpdateStatus =
   | { kind: "idle" }
@@ -41,6 +45,41 @@ type UpdateStatus =
   | { kind: "up-to-date"; version: string }
   | { kind: "available"; version: string; url: string }
   | { kind: "error"; message: string };
+
+type SnoozeMenuState = {
+  alarmId: string;
+  top: number;
+  left: number;
+};
+
+type SnoozeDraft = {
+  days: string;
+  hours: string;
+  minutes: string;
+};
+
+function createDefaultSnoozeDraft(): SnoozeDraft {
+  return {
+    days: "0",
+    hours: "0",
+    minutes: "5",
+  };
+}
+
+function clampSnoozeField(value: string, max: number) {
+  const digits = String(value).replace(/[^\d]/g, "");
+  if (!digits) {
+    return "0";
+  }
+  return String(Math.min(max, Number.parseInt(digits, 10) || 0));
+}
+
+function parseSnoozeDraft(draft: SnoozeDraft): SnoozeDurationInput | null {
+  const days = Number.parseInt(draft.days, 10) || 0;
+  const hours = Number.parseInt(draft.hours, 10) || 0;
+  const minutes = Number.parseInt(draft.minutes, 10) || 0;
+  return days > 0 || hours > 0 || minutes > 0 ? { days, hours, minutes } : null;
+}
 
 const DATE_FNS_LOCALES = {
   es,
@@ -142,6 +181,11 @@ const MESSAGES = {
     ringingSection: "Sonando",
     nothingActive: "Nada activo.",
     dismiss: "Descartar",
+    snooze: "Posponer",
+    daysShortLabel: "Días",
+    hoursShortLabel: "Horas",
+    minutesShortLabel: "Min",
+    apply: "Aplicar",
     about: "Acerca de",
     settings: "Configuración",
     close: "Cerrar",
@@ -233,6 +277,11 @@ const MESSAGES = {
     ringingSection: "Sonant",
     nothingActive: "No hi ha res actiu.",
     dismiss: "Descarta",
+    snooze: "Posposa",
+    daysShortLabel: "Dies",
+    hoursShortLabel: "Hores",
+    minutesShortLabel: "Min",
+    apply: "Aplica",
     about: "Quant a",
     settings: "Configuració",
     close: "Tanca",
@@ -324,6 +373,11 @@ const MESSAGES = {
     ringingSection: "Soando",
     nothingActive: "Nada activo.",
     dismiss: "Descartar",
+    snooze: "Pospoñer",
+    daysShortLabel: "Días",
+    hoursShortLabel: "Horas",
+    minutesShortLabel: "Min",
+    apply: "Aplicar",
     about: "Acerca de",
     settings: "Configuración",
     close: "Pechar",
@@ -415,6 +469,11 @@ const MESSAGES = {
     ringingSection: "Jotzen",
     nothingActive: "Ez dago ezer aktibo.",
     dismiss: "Baztertu",
+    snooze: "Atzeratu",
+    daysShortLabel: "Egun",
+    hoursShortLabel: "Ordu",
+    minutesShortLabel: "Min",
+    apply: "Aplikatu",
     about: "Honi buruz",
     settings: "Ezarpenak",
     close: "Itxi",
@@ -506,6 +565,11 @@ const MESSAGES = {
     ringingSection: "Ringing",
     nothingActive: "Nothing active.",
     dismiss: "Dismiss",
+    snooze: "Snooze",
+    daysShortLabel: "Days",
+    hoursShortLabel: "Hours",
+    minutesShortLabel: "Min",
+    apply: "Apply",
     about: "About",
     settings: "Settings",
     close: "Close",
@@ -960,6 +1024,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
+  const [snoozeMenu, setSnoozeMenu] = useState<SnoozeMenuState | null>(null);
+  const [snoozeDraft, setSnoozeDraft] = useState<SnoozeDraft>(() => createDefaultSnoozeDraft());
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioObjectUrlRef = useRef<string | null>(null);
   const soundFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1037,6 +1103,32 @@ function App() {
     [state.alarms]
   );
   const activeSoundSource = ringingAlarms.find((alarm) => alarm.soundEnabled)?.soundSource ?? ALARM_SOUND_PATH;
+
+  useEffect(() => {
+    if (!snoozeMenu) {
+      return;
+    }
+
+    const handlePointerDown = () => setSnoozeMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSnoozeMenu(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [snoozeMenu]);
+
+  useEffect(() => {
+    if (snoozeMenu && !ringingAlarms.some((alarm) => alarm.id === snoozeMenu.alarmId)) {
+      setSnoozeMenu(null);
+    }
+  }, [ringingAlarms, snoozeMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1216,6 +1308,45 @@ function App() {
 
   async function dismissAlarm(id: string) {
     await window.alarmApi.dismissAlarm(id);
+  }
+
+  async function snoozeAlarm(id: string, duration: SnoozeDurationInput) {
+    setSnoozeMenu(null);
+    setSnoozeDraft(createDefaultSnoozeDraft());
+    await window.alarmApi.snoozeAlarm(id, duration);
+  }
+
+  function toggleSnoozeMenu(id: string, event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 240;
+    const menuHeight = 124;
+    const margin = 8;
+    const fitsBelow = rect.bottom + margin + menuHeight <= window.innerHeight;
+    const left = Math.min(window.innerWidth - menuWidth - margin, Math.max(margin, rect.right - menuWidth));
+    const top = fitsBelow ? rect.bottom + margin : Math.max(margin, rect.top - menuHeight - margin);
+
+    setSnoozeMenu((current) => {
+      const next = current?.alarmId === id ? null : { alarmId: id, top, left };
+      if (next) {
+        setSnoozeDraft(createDefaultSnoozeDraft());
+      } else {
+        setSnoozeDraft(createDefaultSnoozeDraft());
+      }
+      return next;
+    });
+  }
+
+  async function submitSnoozeMenu() {
+    if (!snoozeMenu) {
+      return;
+    }
+    const duration = parseSnoozeDraft(snoozeDraft);
+    if (!duration) {
+      return;
+    }
+    await snoozeAlarm(snoozeMenu.alarmId, duration);
   }
 
   async function deleteAlarm(id: string) {
@@ -1881,9 +2012,14 @@ function App() {
                       <span>{formatTargetDate(alarm.targetAt, appLocale, messages)}</span>
                     </div>
 
-                    <button type="button" className="primary-button" onClick={() => dismissAlarm(alarm.id)}>
-                      {messages.dismiss}
-                    </button>
+                    <div className="alarm-actions">
+                      <button type="button" className="secondary-button" onClick={(event) => toggleSnoozeMenu(alarm.id, event)}>
+                        {messages.snooze}
+                      </button>
+                      <button type="button" className="primary-button" onClick={() => dismissAlarm(alarm.id)}>
+                        {messages.dismiss}
+                      </button>
+                    </div>
                   </article>
                 ))
               )}
@@ -1891,6 +2027,55 @@ function App() {
           </div>
         </section>
       </section>
+
+      {snoozeMenu
+        ? createPortal(
+            <div
+              className="alarm-floating-menu"
+              style={{ top: `${snoozeMenu.top}px`, left: `${snoozeMenu.left}px` }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div className="snooze-grid">
+                <label className="snooze-field">
+                  <span>{messages.daysShortLabel}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={snoozeDraft.days}
+                    onChange={(event) => setSnoozeDraft((current) => ({ ...current, days: clampSnoozeField(event.target.value, SNOOZE_FIELD_MAX) }))}
+                  />
+                </label>
+                <label className="snooze-field">
+                  <span>{messages.hoursShortLabel}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={snoozeDraft.hours}
+                    onChange={(event) => setSnoozeDraft((current) => ({ ...current, hours: clampSnoozeField(event.target.value, 23) }))}
+                  />
+                </label>
+                <label className="snooze-field">
+                  <span>{messages.minutesShortLabel}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={snoozeDraft.minutes}
+                    onChange={(event) => setSnoozeDraft((current) => ({ ...current, minutes: clampSnoozeField(event.target.value, 59) }))}
+                  />
+                </label>
+              </div>
+              <div className="snooze-menu-actions">
+                <button type="button" className="secondary-button full-width" onClick={() => setSnoozeMenu(null)}>
+                  {messages.cancel}
+                </button>
+                <button type="button" className="primary-button full-width" onClick={() => void submitSnoozeMenu()}>
+                  {messages.apply}
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {settingsOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>

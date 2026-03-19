@@ -196,18 +196,20 @@ export function normalizeStoredRepeat(value, fallbackTargetAt) {
 
 export function advanceAlarm(alarm, referenceNow = Date.now()) {
   const now = Number(referenceNow);
+  const occurrenceTargetAt = Number.isFinite(Number(alarm.baseTargetAt)) ? Number(alarm.baseTargetAt) : alarm.targetAt;
 
   if (alarm.repeat.kind === "none") {
     return {
       ...alarm,
       status: "dismissed",
+      baseTargetAt: null,
       acknowledgedAt: now,
       updatedAt: now,
     };
   }
 
   let occurrenceCount = alarm.repeat.occurrenceCount;
-  let candidateTargetAt = alarm.targetAt;
+  let candidateTargetAt = occurrenceTargetAt;
 
   for (let guard = 0; guard < 500; guard += 1) {
     const nextTargetAt = getImmediateNextTargetAt(candidateTargetAt, alarm.repeat);
@@ -227,6 +229,7 @@ export function advanceAlarm(alarm, referenceNow = Date.now()) {
       return {
         ...alarm,
         targetAt: nextTargetAt,
+        baseTargetAt: null,
         status: "scheduled",
         acknowledgedAt: now,
         updatedAt: now,
@@ -243,6 +246,7 @@ export function advanceAlarm(alarm, referenceNow = Date.now()) {
   return {
     ...alarm,
     status: "dismissed",
+    baseTargetAt: null,
     acknowledgedAt: now,
     updatedAt: now,
   };

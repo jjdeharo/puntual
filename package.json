@@ -1,7 +1,7 @@
 {
   "name": "puntual",
   "private": true,
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "AGPL-3.0-or-later",
   "description": "Puntual, alarma de escritorio para Linux con bandeja del sistema y persistencia real.",
   "homepage": "https://github.com/jjdeharo/puntual",

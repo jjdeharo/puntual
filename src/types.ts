@@ -36,6 +36,7 @@ export type Alarm = {
   title: string;
   notes: string;
   targetAt: number;
+  baseTargetAt: number | null;
   repeat: AlarmRepeat;
   createdAt: number;
   updatedAt: number;
@@ -50,6 +51,7 @@ export type AlarmSettings = {
   silenceWhileWindowOpen: boolean;
   locale: AppLocale;
   lastSoundSource: string | null;
+  alarmPopupPosition: { x: number; y: number } | null;
 };
 
 export type AlarmState = {
@@ -66,6 +68,12 @@ export type AlarmInput = {
   repeat: AlarmRepeatInput;
 };
 
+export type SnoozeDurationInput = {
+  days: number;
+  hours: number;
+  minutes: number;
+};
+
 declare global {
   const __APP_VERSION__: string;
   const __APP_LICENSE__: string;
@@ -77,6 +85,10 @@ declare global {
       createAlarm: (payload: AlarmInput) => Promise<AlarmState>;
       updateAlarm: (payload: AlarmInput & { id: string }) => Promise<AlarmState>;
       dismissAlarm: (id: string) => Promise<AlarmState>;
+      snoozeAlarm: (id: string, duration: SnoozeDurationInput) => Promise<AlarmState>;
+      dismissAllRinging: () => Promise<AlarmState>;
+      snoozeRinging: (duration: SnoozeDurationInput) => Promise<AlarmState>;
+      setAlarmPopupExpanded: (expanded: boolean) => Promise<void>;
       deleteAlarm: (id: string) => Promise<AlarmState>;
       setLaunchAtLogin: (enabled: boolean) => Promise<AlarmState>;
       setLocale: (locale: AppLocale) => Promise<AlarmState>;

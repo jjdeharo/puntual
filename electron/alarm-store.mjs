@@ -9,6 +9,7 @@ const DEFAULT_STATE = {
     silenceWhileWindowOpen: false,
     locale: "system",
     lastSoundSource: null,
+    alarmPopupPosition: null,
   },
 };
 
@@ -75,6 +76,7 @@ function normalizeState(value) {
 
   settings.locale = normalizeLocale(settings.locale);
   settings.lastSoundSource = normalizeSoundSource(settings.lastSoundSource);
+  settings.alarmPopupPosition = normalizePopupPosition(settings.alarmPopupPosition);
 
   return { alarms, settings };
 }
@@ -97,6 +99,7 @@ function normalizeAlarm(value) {
     title: String(value.title ?? ""),
     notes: String(value.notes ?? ""),
     targetAt,
+    baseTargetAt: Number.isFinite(Number(value.baseTargetAt)) ? Number(value.baseTargetAt) : null,
     repeat: normalizeStoredRepeat(value.repeat, targetAt),
     createdAt,
     updatedAt,
@@ -121,4 +124,18 @@ function normalizeLocale(value) {
 
 function normalizeSoundSource(value) {
   return typeof value === "string" && value.startsWith("file://") ? value : null;
+}
+
+function normalizePopupPosition(value) {
+  const x = Number(value?.x);
+  const y = Number(value?.y);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+  };
 }

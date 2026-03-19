@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, Tray, nativeImage, nativeTheme, screen, shell } from "electron";
 import { createAlarmStore } from "./alarm-store.mjs";
 import { advanceAlarm, createStoredRepeat } from "./recurrence.mjs";
 import { createAlarmScheduler } from "./scheduler.mjs";
@@ -13,10 +13,17 @@ const isAutoLaunch = process.argv.includes("--autostart");
 const linuxAutoStartDesktopFileName = "io.jjdeharo.puntual.desktop";
 
 let mainWindow = null;
+let alarmPopupWindow = null;
 let tray = null;
 let isQuitting = false;
+let alarmPopupMoveTimer = null;
+let alarmPopupExpanded = false;
 
 const store = createAlarmStore(path.join(app.getPath("userData"), "alarms.json"));
+const ALARM_POPUP_MARGIN = 18;
+const ALARM_POPUP_WIDTH = 352;
+const ALARM_POPUP_MIN_HEIGHT = 184;
+const ALARM_POPUP_MAX_HEIGHT = 328;
 
 function log(...args) {
   console.log("[puntual]", ...args);
@@ -27,6 +34,10 @@ function getWindowUrl() {
     return process.env.VITE_DEV_SERVER_URL;
   }
   return `file://${path.join(__dirname, "..", "dist", "renderer", "index.html")}`;
+}
+
+function getAlarmPopupUrl() {
+  return `${getWindowUrl()}#alarm-popup`;
 }
 
 function syncLaunchAtLogin(enabled) {
@@ -191,6 +202,183 @@ function createWindow() {
   }
 }
 
+function getRingingAlarms(state = store.getState()) {
+  return state.alarms.filter((alarm) => alarm.status === "ringing").sort((a, b) => a.targetAt - b.targetAt);
+}
+
+function getAlarmPopupSize(state = store.getState()) {
+  const ringingCount = getRingingAlarms(state).length;
+  if (ringingCount <= 1) {
+    return {
+      width: 352,
+      height: 214,
+    };
+  }
+
+  if (!alarmPopupExpanded) {
+    return {
+      width: 352,
+      height: 228,
+    };
+  }
+
+  return {
+    width: ALARM_POPUP_WIDTH,
+    height: Math.max(ALARM_POPUP_MIN_HEIGHT, Math.min(420, 198 + ringingCount * 50)),
+  };
+}
+
+function clampPopupBounds(position, size) {
+  const targetRect = {
+    x: Number(position?.x) || 0,
+    y: Number(position?.y) || 0,
+    width: size.width,
+    height: size.height,
+  };
+  const display = screen.getDisplayMatching(targetRect);
+  const { workArea } = display;
+  const maxX = workArea.x + workArea.width - size.width;
+  const maxY = workArea.y + workArea.height - size.height;
+
+  return {
+    x: Math.min(Math.max(Math.round(targetRect.x), workArea.x), Math.max(workArea.x, maxX)),
+    y: Math.min(Math.max(Math.round(targetRect.y), workArea.y), Math.max(workArea.y, maxY)),
+  };
+}
+
+function getDefaultAlarmPopupPosition(size) {
+  const display = screen.getPrimaryDisplay();
+  const { workArea } = display;
+  return {
+    x: workArea.x + workArea.width - size.width - ALARM_POPUP_MARGIN,
+    y: workArea.y + workArea.height - size.height - ALARM_POPUP_MARGIN,
+  };
+}
+
+function getAlarmPopupBounds(state = store.getState()) {
+  const size = getAlarmPopupSize(state);
+  const savedPosition = state.settings.alarmPopupPosition;
+  const position = savedPosition ? clampPopupBounds(savedPosition, size) : getDefaultAlarmPopupPosition(size);
+
+  return {
+    ...position,
+    ...size,
+  };
+}
+
+function persistAlarmPopupPosition() {
+  if (!alarmPopupWindow || alarmPopupWindow.isDestroyed()) {
+    return;
+  }
+
+  const [x, y] = alarmPopupWindow.getPosition();
+  const current = store.getState().settings.alarmPopupPosition;
+  if (current?.x === x && current?.y === y) {
+    return;
+  }
+
+  const nextState = store.mutate((existing) => ({
+    ...existing,
+    settings: {
+      ...existing.settings,
+      alarmPopupPosition: { x, y },
+    },
+  }));
+  sendState(nextState);
+}
+
+function scheduleAlarmPopupPositionPersist() {
+  if (alarmPopupMoveTimer) {
+    clearTimeout(alarmPopupMoveTimer);
+  }
+  alarmPopupMoveTimer = setTimeout(() => {
+    alarmPopupMoveTimer = null;
+    persistAlarmPopupPosition();
+  }, 150);
+}
+
+function createAlarmPopupWindow() {
+  if (alarmPopupWindow && !alarmPopupWindow.isDestroyed()) {
+    return alarmPopupWindow;
+  }
+
+  const bounds = getAlarmPopupBounds();
+  alarmPopupWindow = new BrowserWindow({
+    ...bounds,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#08131f",
+    movable: true,
+    title: "Puntual Alarmas",
+    icon: path.join(__dirname, "tray-icon.png"),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  alarmPopupWindow.setAlwaysOnTop(true, "screen-saver");
+  alarmPopupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  alarmPopupWindow.loadURL(getAlarmPopupUrl());
+  alarmPopupWindow.webContents.on("did-finish-load", () => {
+    alarmPopupWindow?.webContents.send("state:sync", store.getState());
+  });
+  alarmPopupWindow.on("close", (event) => {
+    if (isQuitting) {
+      return;
+    }
+    event.preventDefault();
+    alarmPopupWindow?.hide();
+  });
+  alarmPopupWindow.on("move", () => {
+    scheduleAlarmPopupPositionPersist();
+  });
+  alarmPopupWindow.on("closed", () => {
+    alarmPopupWindow = null;
+  });
+
+  return alarmPopupWindow;
+}
+
+function syncAlarmPopupWindow(state = store.getState()) {
+  const ringingAlarms = getRingingAlarms(state);
+  if (ringingAlarms.length === 0) {
+    alarmPopupExpanded = false;
+    alarmPopupWindow?.hide();
+    return;
+  }
+
+  if (ringingAlarms.length <= 1) {
+    alarmPopupExpanded = false;
+  }
+
+  const popup = createAlarmPopupWindow();
+  const bounds = getAlarmPopupBounds(state);
+  const [currentX, currentY] = popup.getPosition();
+  const [currentWidth, currentHeight] = popup.getSize();
+  if (
+    currentX !== bounds.x ||
+    currentY !== bounds.y ||
+    currentWidth !== bounds.width ||
+    currentHeight !== bounds.height
+  ) {
+    popup.setBounds(bounds, false);
+  }
+
+  popup.webContents.send("state:sync", state);
+
+  if (!popup.isVisible()) {
+    popup.showInactive();
+  }
+}
+
 function getWindowBackgroundColor() {
   return nativeTheme.shouldUseDarkColors ? "#0b1117" : "#f3f5f7";
 }
@@ -232,7 +420,9 @@ function showWindow() {
 
 function sendState(state = store.getState()) {
   mainWindow?.webContents.send("state:sync", state);
+  alarmPopupWindow?.webContents.send("state:sync", state);
   refreshTrayMenu(state);
+  syncAlarmPopupWindow(state);
 }
 
 function normalizeLocale(value) {
@@ -365,12 +555,64 @@ function dismissAllRinging() {
     ...current,
     alarms: current.alarms.map((alarm) =>
       alarm.status === "ringing"
-        ? { ...alarm, status: "dismissed", acknowledgedAt: now, updatedAt: now }
+        ? advanceAlarm(alarm, now)
         : alarm
     ),
   }));
   sendState(nextState);
   scheduler.evaluate(false);
+  return nextState;
+}
+
+function snoozeAlarm(alarm, durationMs, now) {
+  return {
+    ...alarm,
+    targetAt: now + durationMs,
+    baseTargetAt: alarm.baseTargetAt ?? alarm.targetAt,
+    status: "scheduled",
+    acknowledgedAt: now,
+    updatedAt: now,
+  };
+}
+
+function validateSnoozeDuration(duration) {
+  const days = Math.max(0, Number.parseInt(String(duration?.days ?? 0), 10) || 0);
+  const hours = Math.max(0, Number.parseInt(String(duration?.hours ?? 0), 10) || 0);
+  const minutes = Math.max(0, Number.parseInt(String(duration?.minutes ?? 0), 10) || 0);
+  const totalMs = days * 24 * 60 * 60 * 1000 + hours * 60 * 60 * 1000 + minutes * 60 * 1000;
+
+  if (!Number.isFinite(totalMs) || totalMs <= 0) {
+    throw new Error("Tiempo de posposición no válido.");
+  }
+
+  return totalMs;
+}
+
+function snoozeAlarmById(id, duration) {
+  const alarmId = String(id ?? "");
+  const durationMs = validateSnoozeDuration(duration);
+  const now = Date.now();
+  const nextState = store.mutate((current) => ({
+    ...current,
+    alarms: current.alarms.map((alarm) =>
+      alarm.id === alarmId && alarm.status === "ringing" ? snoozeAlarm(alarm, durationMs, now) : alarm
+    ),
+  }));
+  sendState(nextState);
+  scheduler.evaluate(false);
+  return nextState;
+}
+
+function snoozeRinging(duration) {
+  const durationMs = validateSnoozeDuration(duration);
+  const now = Date.now();
+  const nextState = store.mutate((current) => ({
+    ...current,
+    alarms: current.alarms.map((alarm) => (alarm.status === "ringing" ? snoozeAlarm(alarm, durationMs, now) : alarm)),
+  }));
+  sendState(nextState);
+  scheduler.evaluate(false);
+  return nextState;
 }
 
 const scheduler = createAlarmScheduler({
@@ -423,6 +665,7 @@ function validateAlarmInput(payload, requireId = false) {
     title,
     notes,
     targetAt,
+    baseTargetAt: null,
     soundEnabled,
     soundSource,
     repeat,
@@ -564,6 +807,16 @@ app.whenReady().then(() => {
     return nextState;
   });
 
+  ipcMain.handle("alarm:dismiss-all-ringing", () => dismissAllRinging());
+
+  ipcMain.handle("alarm:snooze", (_event, payload) => snoozeAlarmById(payload?.id, payload?.duration));
+
+  ipcMain.handle("alarm:snooze-ringing", (_event, duration) => snoozeRinging(duration));
+  ipcMain.handle("alarm-popup:set-expanded", (_event, expanded) => {
+    alarmPopupExpanded = Boolean(expanded);
+    syncAlarmPopupWindow(store.getState());
+  });
+
   ipcMain.handle("alarm:delete", (_event, id) => {
     const nextState = store.mutate((current) => ({
       ...current,
@@ -590,7 +843,10 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("settings:set-locale", (_event, locale) => {
-    const nextLocale = locale === "es" || locale === "ca" || locale === "en" || locale === "system" ? locale : "system";
+    const nextLocale =
+      locale === "es" || locale === "ca" || locale === "en" || locale === "ga" || locale === "eu" || locale === "system"
+        ? locale
+        : "system";
     const nextState = store.mutate((current) => ({
       ...current,
       settings: {
