@@ -161,6 +161,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -440,35 +441,41 @@ function t(state, key, variables = {}) {
     es: {
       tray_idle: "Puntual",
       tray_ringing: "{count} sonando",
-      tray_next: "Próxima alarma a las {time}",
+      tray_next: "Próxima alarma: {time}",
       tray_open: "Abrir Puntual",
       tray_silence: "Silenciar {count} alarma{suffix}",
       tray_none_ringing: "No hay alarmas sonando",
       tray_next_item: "Siguiente: {value}",
       tray_none_scheduled: "Sin alarmas programadas",
       tray_quit: "Salir",
+      today: "hoy",
+      tomorrow: "mañana",
     },
     ca: {
       tray_idle: "Puntual",
       tray_ringing: "{count} sonant",
-      tray_next: "Pròxima alarma a les {time}",
+      tray_next: "Pròxima alarma: {time}",
       tray_open: "Obrir Puntual",
       tray_silence: "Silencia {count} alarma{suffix}",
       tray_none_ringing: "No hi ha alarmes sonant",
       tray_next_item: "Següent: {value}",
       tray_none_scheduled: "No hi ha alarmes programades",
       tray_quit: "Sortir",
+      today: "avui",
+      tomorrow: "demà",
     },
     ga: {
       tray_idle: "Puntual",
       tray_ringing: "{count} soando",
-      tray_next: "Próxima alarma ás {time}",
+      tray_next: "Próxima alarma: {time}",
       tray_open: "Abrir Puntual",
       tray_silence: "Silenciar {count} alarma{suffix}",
       tray_none_ringing: "Non hai alarmas soando",
       tray_next_item: "Seguinte: {value}",
       tray_none_scheduled: "Sen alarmas programadas",
       tray_quit: "Saír",
+      today: "hoxe",
+      tomorrow: "mañá",
     },
     eu: {
       tray_idle: "Puntual",
@@ -480,22 +487,54 @@ function t(state, key, variables = {}) {
       tray_next_item: "Hurrengoa: {value}",
       tray_none_scheduled: "Ez dago alarmarik programatuta",
       tray_quit: "Irten",
+      today: "gaur",
+      tomorrow: "bihar",
     },
     en: {
       tray_idle: "Puntual",
       tray_ringing: "{count} ringing",
-      tray_next: "Next alarm at {time}",
+      tray_next: "Next alarm: {time}",
       tray_open: "Open Puntual",
       tray_silence: "Silence {count} alarm{suffix}",
       tray_none_ringing: "No alarms ringing",
       tray_next_item: "Next: {value}",
       tray_none_scheduled: "No alarms scheduled",
       tray_quit: "Quit",
+      today: "today",
+      tomorrow: "tomorrow",
     },
   };
 
   const template = dictionaries[locale][key] ?? dictionaries.es[key] ?? key;
   return template.replace(/\{(\w+)\}/g, (_match, token) => String(variables[token] ?? ""));
+}
+
+function isSameDay(left, right) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function formatNextAlarmValue(state, targetAt) {
+  const locale = getResolvedLocale(state?.settings?.locale);
+  const target = new Date(targetAt);
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const time = target.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  if (isSameDay(target, now)) {
+    return `${t(state, "today")} ${time}`;
+  }
+
+  if (isSameDay(target, tomorrow)) {
+    return `${t(state, "tomorrow")} ${time}`;
+  }
+
+  const date = target.toLocaleDateString(locale, { day: "2-digit", month: "2-digit" });
+  return `${date} ${time}`;
 }
 
 function refreshTrayMenu(state) {
@@ -510,9 +549,7 @@ function refreshTrayMenu(state) {
     ringingCount > 0
       ? `Puntual: ${t(state, "tray_ringing", { count: ringingCount })}`
       : nextAlarm
-        ? t(state, "tray_next", {
-            time: new Date(nextAlarm.targetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          })
+        ? t(state, "tray_next", { time: formatNextAlarmValue(state, nextAlarm.targetAt) })
         : t(state, "tray_idle")
   );
 
@@ -532,7 +569,7 @@ function refreshTrayMenu(state) {
     { type: "separator" },
     {
       label: nextAlarm
-        ? t(state, "tray_next_item", { value: new Date(nextAlarm.targetAt).toLocaleString() })
+        ? t(state, "tray_next_item", { value: formatNextAlarmValue(state, nextAlarm.targetAt) })
         : t(state, "tray_none_scheduled"),
       enabled: false,
     },

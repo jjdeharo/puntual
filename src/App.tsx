@@ -1036,6 +1036,12 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
+    const refreshNow = () => setNow(Date.now());
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshNow();
+      }
+    };
 
     window.alarmApi.getState().then((nextState) => {
       if (!mounted) {
@@ -1052,12 +1058,16 @@ function App() {
     });
     const unsubscribeRing = window.alarmApi.onRingState((nextRinging) => setRinging(nextRinging));
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    window.addEventListener("focus", refreshNow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       mounted = false;
       unsubscribeState();
       unsubscribeRing();
       window.clearInterval(timer);
+      window.removeEventListener("focus", refreshNow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
